@@ -7,6 +7,18 @@ import { Card } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
 import { Modal } from '../../../../components/ui/modal';
 
+function formatDate(value) {
+  if (!value) return '—';
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '—';
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default function ApplicationDetailsPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -66,6 +78,8 @@ export default function ApplicationDetailsPage() {
         <div>
           <h1 className="title">{application?.name || 'Application Details'}</h1>
           <p className="subtitle">{application?.companyName ? `Company: ${application.companyName}` : 'Read-only application data.'}</p>
+          <p className="subtitle">Created: {formatDate(application?.createdAt)}</p>
+          <p className="subtitle">Last modified: {formatDate(application?.updatedAt)}</p>
         </div>
         <Link href="/dashboard"><Button variant="secondary">Back to Applications</Button></Link>
       </div>

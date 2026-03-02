@@ -13,7 +13,7 @@ const adminMenu = [
   { key: 'upload', label: '📁 File Upload', href: '/admin?tab=upload' }
 ];
 
-export function AdminSidebar({ collapsed, onToggle, activeTab, onNavigate }) {
+export function AdminSidebar({ collapsed, onToggle, activeTab, onNavigate, applications = [], selectedApplicationId = '' }) {
   const pathname = usePathname();
 
   return (
@@ -34,6 +34,21 @@ export function AdminSidebar({ collapsed, onToggle, activeTab, onNavigate }) {
             </Link>
           );
         })}
+
+        {!collapsed && activeTab === 'applications' ? (
+          <div className="stack app-sidebar-list">
+            {applications.map((application) => (
+              <Link
+                key={application.id}
+                href={`/admin?tab=applications&applicationId=${application.id}`}
+                className={`nav-sub-btn ${selectedApplicationId === application.id ? 'active' : ''}`}
+                onClick={() => onNavigate('applications', application.id)}
+              >
+                {application.name}
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </div>
     </aside>
   );

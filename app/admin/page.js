@@ -77,15 +77,23 @@ export default function AdminPage() {
     [applications]
   );
 
+  const applicationRecords = useMemo(
+    () => (selectedApp ? records.filter((record) => record.applicationId === selectedApp) : records),
+    [records, selectedApp]
+  );
+
   const selectedApplication = useMemo(
     () => applications.find((entry) => entry.id === selectedApp),
     [applications, selectedApp]
   );
 
   useEffect(() => {
-    const tab = new URLSearchParams(window.location.search).get('tab');
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const applicationId = params.get('applicationId') || '';
     const allowedTabs = ['home', 'companies', 'applications', 'fields', 'users', 'upload'];
     setActive(allowedTabs.includes(tab) ? tab : 'home');
+    setSelectedApp(applicationId);
   }, []);
 
   const refresh = async () => {
@@ -266,8 +274,11 @@ export default function AdminPage() {
 
   const filteredCompanies = data.filter((company) => company.name.toLowerCase().includes(search.toLowerCase()));
 
-  const onSidebarNavigate = (tab) => {
+  const onSidebarNavigate = (tab, applicationId = '') => {
     setActive(tab);
+    if (tab === 'applications') {
+      setSelectedApp(applicationId);
+    }
     if (tab === 'home') {
       setSearch('');
       setSelectedCompany('');
@@ -288,7 +299,14 @@ export default function AdminPage() {
 
   return (
     <main className="admin-shell">
-      <AdminSidebar collapsed={collapsed} onToggle={() => setCollapsed((value) => !value)} activeTab={active} onNavigate={onSidebarNavigate} />
+      <AdminSidebar
+        collapsed={collapsed}
+        onToggle={() => setCollapsed((value) => !value)}
+        activeTab={active}
+        onNavigate={onSidebarNavigate}
+        applications={applications}
+        selectedApplicationId={selectedApp}
+      />
 
       <section className="main">
         <header className="topbar">
@@ -362,19 +380,37 @@ export default function AdminPage() {
             ))}
           </Card> : null}
           {active === 'home' || active === 'applications' ? <Card className="stack">
-            <h2>Data Listing</h2>
+            <h2>Applications Management</h2>
             <DataTable
               columns={[
-                { key: 'appName', label: 'Application' },
-                { key: 'id', label: 'Record ID' },
+                { key: 'name', label: 'Application' },
+                { key: 'companyName', label: 'Company' },
+                { key: 'fields', label: 'Fields', render: (row) => row.fields?.length || 0 },
+                { key: 'records', label: 'Records', render: (row) => row.records?.length || 0 },
                 {
                   key: 'actions',
                   label: 'Actions',
-                  render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('data', row)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('data', row.id, `${row.appName} / ${row.id}`)}>Delete</Button></div>
+                  render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('application', row)}>Edit</Button><Button onClick={() => openDelete('application', row.id, row.name)}>Delete</Button></div>
                 }
               ]}
-              data={records}
+              data={applications}
             />
+
+            {active === 'applications' ? <>
+              <h2 className="section-mini-gap">{selectedApplication?.name ? `${selectedApplication.name} Records` : 'Application Records'}</h2>
+              <DataTable
+                columns={[
+                  { key: 'appName', label: 'Application' },
+                  { key: 'id', label: 'Record ID' },
+                  {
+                    key: 'actions',
+                    label: 'Actions',
+                    render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('data', row)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('data', row.id, `${row.appName} / ${row.id}`)}>Delete</Button></div>
+                  }
+                ]}
+                data={applicationRecords}
+              />
+            </> : null}
           </Card> : null}
         </div> : null}
 

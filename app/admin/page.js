@@ -220,19 +220,39 @@ export default function AdminPage() {
     setStatusMessage('');
     try {
       const response = await fetch(endpointMap[editing.type], {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const payload = await response.json();
+      const responseText = await response.text();
+      let payload = {};
+      if (responseText) {
+        try {
+          payload = JSON.parse(responseText);
+        } catch {
+          payload = { error: responseText };
+        }
+      }
       if (!response.ok) {
         setStatusMessage(payload.error || 'Update failed.');
         return;
       }
+
+      if (payload.success !== undefined && !payload.success) {
+        setStatusMessage(payload.error || 'Update failed.');
+        return;
+      }
+
       setEditing({ open: false, type: '', id: '', payload: {}, title: '' });
-      setStatusMessage('Update completed successfully.');
+      setStatusMessage(payload.message || 'Update completed successfully.');
       refresh();
-    } catch {
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('[admin:update] request failed', {
+        type: editing.type,
+        id: editing.id,
+        error: error?.message
+      });
       setStatusMessage('Update request failed. Please retry.');
     } finally {
       setSavingEdit(false);

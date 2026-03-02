@@ -113,6 +113,18 @@ function sendUpdateSuccess(res, data) {
   res.status(200).json({ success: true, data });
 }
 
+function ensureTimestamps(entity, now = new Date().toISOString()) {
+  if (!entity.createdAt) {
+    entity.createdAt = now;
+  }
+
+  if (!entity.updatedAt) {
+    entity.updatedAt = entity.createdAt;
+  }
+
+  return entity;
+}
+
 
 function normalizeRecordFields(fields, recordValues = {}) {
   return fields
@@ -174,6 +186,11 @@ app.prepare().then(() => {
         createdAt: new Date().toISOString()
       });
     }
+
+    const now = new Date().toISOString();
+    db.companies = db.companies.map((company) => ensureTimestamps(company, now));
+    db.applications = db.applications.map((application) => ensureTimestamps(application, now));
+
     return db;
   });
 
@@ -253,7 +270,9 @@ app.prepare().then(() => {
       .filter((appEntry) => appEntry.name.toLowerCase().includes(search))
       .map((appEntry) => ({
         id: appEntry.id,
-        name: appEntry.name
+        name: appEntry.name,
+        createdAt: appEntry.createdAt,
+        updatedAt: appEntry.updatedAt
       }));
 
     res.json({ applications });
@@ -284,6 +303,8 @@ app.prepare().then(() => {
       id: application.id,
       name: application.name,
       companyName: company?.name || 'Unknown Company',
+      createdAt: application.createdAt,
+      updatedAt: application.updatedAt,
       records
     });
   });
@@ -295,7 +316,8 @@ app.prepare().then(() => {
       return;
     }
 
-    const company = { id: nextId('cmp'), name, createdAt: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const company = { id: nextId('cmp'), name, createdAt: now, updatedAt: now };
     withDb((db) => {
       db.companies.push(company);
       return db;
@@ -313,7 +335,8 @@ app.prepare().then(() => {
       return;
     }
 
-    const application = { id: nextId('app'), companyId, name, createdAt: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const application = { id: nextId('app'), companyId, name, createdAt: now, updatedAt: now };
     withDb((current) => {
       current.applications.push(application);
       return current;
@@ -572,6 +595,7 @@ app.prepare().then(() => {
     }
 
     company.name = nextName;
+    company.updatedAt = new Date().toISOString();
     writeDb(db);
     logUpdateSuccess('company', id, { name: company.name }, req.user);
     sendUpdateSuccess(res, company);
@@ -613,6 +637,7 @@ app.prepare().then(() => {
     }
 
     application.name = nextName;
+    application.updatedAt = new Date().toISOString();
     writeDb(db);
     logUpdateSuccess('application', id, { name: application.name }, req.user);
     sendUpdateSuccess(res, application);

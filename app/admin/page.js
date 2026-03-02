@@ -245,29 +245,31 @@ export default function AdminPage() {
   };
 
   const executeEdit = async () => {
+    const { type, id, payload: draftPayload } = editing;
+
     const endpointMap = {
-      company: `/api/companies/${editing.id}`,
-      application: `/api/applications/${editing.id}`,
-      field: `/api/fields/${editing.id}`,
-      data: `/api/records/${editing.id}`,
-      user: `/api/users/${editing.id}`
+      company: `/api/companies/${id}`,
+      application: `/api/applications/${id}`,
+      field: `/api/fields/${id}`,
+      data: `/api/records/${id}`,
+      user: `/api/users/${id}`
     };
 
-    if (!endpointMap[editing.type] || !editing.id) {
+    if (!endpointMap[type] || !id) {
       setStatusMessage('Unable to submit edit: missing entity type or ID.');
       return;
     }
 
-    const payload = { ...editing.payload };
-    if (editing.type === 'user' && !payload.password) delete payload.password;
-    if (editing.type === 'field' && payload.order === '') delete payload.order;
+    const payload = { ...draftPayload };
+    if (type === 'user' && !payload.password) delete payload.password;
+    if (type === 'field' && payload.order === '') delete payload.order;
 
-    if ((editing.type === 'company' || editing.type === 'application') && !String(payload.name || '').trim()) {
+    if ((type === 'company' || type === 'application') && !String(payload.name || '').trim()) {
       setStatusMessage('Name is required.');
       return;
     }
 
-    if (editing.type === 'user' && !String(payload.username || '').trim()) {
+    if (type === 'user' && !String(payload.username || '').trim()) {
       setStatusMessage('Username is required.');
       return;
     }
@@ -275,42 +277,42 @@ export default function AdminPage() {
     setSavingEdit(true);
     setStatusMessage('');
     try {
-      const response = await fetch(endpointMap[editing.type], {
+      const response = await fetch(endpointMap[type], {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       const responseText = await response.text();
-      let payload = {};
+      let responsePayload = {};
       if (responseText) {
         try {
-          payload = JSON.parse(responseText);
+          responsePayload = JSON.parse(responseText);
         } catch {
-          payload = { error: responseText };
+          responsePayload = { error: responseText };
         }
       }
       if (!response.ok) {
-        setStatusMessage(payload.error || 'Update failed.');
+        setStatusMessage(`Update failed: ${responsePayload.error || 'unknown error'}`);
         return;
       }
 
-      if (payload.success !== undefined && !payload.success) {
-        setStatusMessage(payload.error || 'Update failed.');
+      if (responsePayload.success !== undefined && !responsePayload.success) {
+        setStatusMessage(`Update failed: ${responsePayload.error || 'unknown error'}`);
         return;
       }
 
-      applyOptimisticEdit(editing.type, editing.id, payload.data || {});
+      applyOptimisticEdit(type, id, responsePayload.data || {});
       setEditing({ open: false, type: '', id: '', payload: {}, title: '' });
-      setStatusMessage(payload.message || 'Update completed successfully.');
+      setStatusMessage(responsePayload.message || 'Update completed successfully.');
       await refresh();
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('[admin:update] request failed', {
-        type: editing.type,
-        id: editing.id,
+        type,
+        id,
         error: error?.message
       });
-      setStatusMessage('Update request failed. Please retry.');
+      setStatusMessage(`Update failed: ${error?.message || 'request error'}`);
     } finally {
       setSavingEdit(false);
     }

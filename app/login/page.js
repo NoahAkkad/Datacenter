@@ -1,10 +1,13 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
+
+const PREVIOUS_USERS_KEY = 'previousUsers';
+const MAX_SUGGESTIONS = 5;
 
 function LoginContent() {
   const params = useSearchParams();
@@ -13,6 +16,46 @@ function LoginContent() {
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [savedUsers, setSavedUsers] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    const storedUsers = window.localStorage.getItem(PREVIOUS_USERS_KEY);
+    if (!storedUsers) return;
+
+    try {
+      const parsedUsers = JSON.parse(storedUsers);
+      if (!Array.isArray(parsedUsers)) return;
+      setSavedUsers(parsedUsers.filter((user) => typeof user === 'string' && user.trim()).slice(0, MAX_SUGGESTIONS));
+    } catch {
+      window.localStorage.removeItem(PREVIOUS_USERS_KEY);
+    }
+  }, []);
+
+  const saveUsername = (username) => {
+    const cleanedUsername = username.trim();
+    if (!cleanedUsername) return;
+
+    const nextUsers = [
+      cleanedUsername,
+      ...savedUsers.filter((user) => user.toLowerCase() !== cleanedUsername.toLowerCase())
+    ].slice(0, MAX_SUGGESTIONS);
+
+    setSavedUsers(nextUsers);
+    window.localStorage.setItem(PREVIOUS_USERS_KEY, JSON.stringify(nextUsers));
+  };
+
+  const clearSavedUsers = () => {
+    setSavedUsers([]);
+    window.localStorage.removeItem(PREVIOUS_USERS_KEY);
+    setShowSuggestions(false);
+  };
+
+  const suggestions = useMemo(() => {
+    const usernameInput = form.username.trim().toLowerCase();
+    if (!usernameInput) return savedUsers;
+    return savedUsers.filter((user) => user.toLowerCase().includes(usernameInput));
+  }, [form.username, savedUsers]);
 
   const onSubmit = async (event) => {
     event.preventDefault();
@@ -34,6 +77,7 @@ function LoginContent() {
     }
 
     const payload = await response.json();
+    saveUsername(form.username);
     const destination = payload.role === 'admin' ? '/admin' : '/dashboard';
     router.push(destination);
     router.refresh();
@@ -56,7 +100,45 @@ function LoginContent() {
           </div>
 
           <form className="stack" onSubmit={onSubmit}>
-            <Input required placeholder="Username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
+            <div className="username-autocomplete">
+              <Input
+                required
+                placeholder="Username"
+                value={form.username}
+                autoComplete="username"
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 120)}
+                onChange={(event) => {
+                  setForm({ ...form, username: event.target.value });
+                  setShowSuggestions(true);
+                }}
+              />
+
+              {showSuggestions && suggestions.length > 0 && (
+                <ul className="username-suggestions" role="listbox" aria-label="Previous usernames">
+                  {suggestions.map((user) => (
+                    <li key={user}>
+                      <button
+                        type="button"
+                        className="username-suggestion-btn"
+                        onMouseDown={() => {
+                          setForm((current) => ({ ...current, username: user }));
+                          setShowSuggestions(false);
+                        }}
+                      >
+                        {user}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {savedUsers.length > 0 && (
+                <button type="button" className="username-clear-btn" onClick={clearSavedUsers}>
+                  Clear saved usernames
+                </button>
+              )}
+            </div>
             <Input required type="password" placeholder="Password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
             {error && <p className="error">{error}</p>}
             <Button type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</Button>

@@ -305,7 +305,7 @@ export default function AdminPage() {
   const openEdit = (type, row) => {
     if (type === 'company') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Company' });
     if (type === 'application') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Application' });
-    if (type === 'field') setEditing({ open: true, type, id: row.id, payload: { name: row.name, label: row.label || '', order: row.order ?? '' }, title: 'Edit Field' });
+    if (type === 'field') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Field' });
     if (type === 'data') setEditing({ open: true, type, id: row.id, payload: { values: row.values || {} }, title: `Edit Record ${row.id}` });
     if (type === 'user') setEditing({ open: true, type, id: row.id, payload: { username: row.username, password: '' }, title: 'Edit User' });
   };
@@ -748,11 +748,9 @@ export default function AdminPage() {
 
       <Modal open={editing.open} onClose={() => !savingEdit && setEditing({ open: false, type: '', id: '', payload: {}, title: '' })} title={editing.title}>
         {editing.type === 'company' || editing.type === 'application' ? <Input value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} /> : null}
-        {editing.type === 'field' ? <>
+        {editing.type === 'field' ? (
           <Input placeholder="Field name" value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} />
-          <Input placeholder="Field label" value={editing.payload.label || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, label: event.target.value } }))} />
-          <Input placeholder="Field order" type="number" value={editing.payload.order} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, order: event.target.value } }))} />
-        </> : null}
+        ) : null}
         {editing.type === 'user' ? <>
           <Input placeholder="Username" value={editing.payload.username || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, username: event.target.value } }))} />
           <Input placeholder="New password (optional)" type="password" value={editing.payload.password || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, password: event.target.value } }))} />

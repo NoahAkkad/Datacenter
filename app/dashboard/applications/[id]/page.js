@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Card } from '../../../../components/ui/card';
@@ -14,12 +14,8 @@ export default function ApplicationDetailsPage() {
   const [application, setApplication] = useState(null);
   const [error, setError] = useState('');
   const [imagePreview, setImagePreview] = useState('');
-  const hasLoadedApplication = useRef(false);
 
   useEffect(() => {
-    if (hasLoadedApplication.current) return;
-    hasLoadedApplication.current = true;
-
     const loadApplication = async () => {
       const meResponse = await fetch('/api/auth/me');
       if (!meResponse.ok) {
@@ -27,9 +23,8 @@ export default function ApplicationDetailsPage() {
         return;
       }
 
-      const mePayload = await meResponse.json();
-      const me = mePayload.data;
-      if (me?.role === 'admin') {
+      const me = await meResponse.json();
+      if (me.role === 'admin') {
         router.replace('/admin');
         return;
       }
@@ -48,7 +43,7 @@ export default function ApplicationDetailsPage() {
       }
 
       const payload = await response.json();
-      setApplication(payload.data);
+      setApplication(payload);
       setLoading(false);
     };
 

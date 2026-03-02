@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -10,19 +10,18 @@ import { Modal } from '../../components/ui/modal';
 import { DataTable } from '../../components/ui/table';
 
 const navItems = [
-  { key: 'companies', label: '🏢 Companies', endpoint: '/api/companies' },
-  { key: 'applications', label: '🧩 Applications', endpoint: '/api/applications' },
-  { key: 'fields', label: '🏷️ Dynamic Fields', endpoint: '/api/fields' },
-  { key: 'users', label: '👥 Users', endpoint: '/api/users' },
-  { key: 'upload', label: '📁 File Upload', endpoint: '/api/files' }
+  { key: 'companies', label: '🏢 Companies' },
+  { key: 'applications', label: '🧩 Applications' },
+  { key: 'fields', label: '🏷️ Dynamic Fields' },
+  { key: 'users', label: '👥 Users' },
+  { key: 'upload', label: '📁 File Upload' }
 ];
-
-const initialTabState = { data: [], loading: false, error: '' };
 
 export default function AdminPage() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [active, setActive] = useState('companies');
+  const [data, setData] = useState([]);
   const [search, setSearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedApp, setSelectedApp] = useState('');
@@ -42,23 +41,11 @@ export default function AdminPage() {
   const [userForm, setUserForm] = useState({ username: '', password: '' });
   const [checkingSession, setCheckingSession] = useState(true);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const hasValidatedSession = useRef(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const [tabData, setTabData] = useState({
-    companies: initialTabState,
-    applications: initialTabState,
-    fields: initialTabState,
-    users: initialTabState,
-    upload: initialTabState
-  });
-
   useEffect(() => {
-    if (hasValidatedSession.current) return;
-    hasValidatedSession.current = true;
-
     const validateSession = async () => {
       const response = await fetch('/api/auth/me');
       if (!response.ok) {
@@ -66,9 +53,8 @@ export default function AdminPage() {
         return;
       }
 
-      const payload = await response.json();
-      const user = payload.data;
-      if (user?.role !== 'admin') {
+      const user = await response.json();
+      if (user.role !== 'admin') {
         router.replace('/dashboard');
         return;
       }
@@ -78,63 +64,29 @@ export default function AdminPage() {
     validateSession();
   }, [router]);
 
-  const fetchTab = async (tabKey, force = false) => {
-    const item = navItems.find((entry) => entry.key === tabKey);
-    if (!item) return;
-
-    if (!force && tabData[tabKey].data.length) return;
-
-    setTabData((current) => ({
-      ...current,
-      [tabKey]: { ...current[tabKey], loading: true, error: '' }
-    }));
-
-    try {
-      const response = await fetch(item.endpoint);
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || `Unable to load ${tabKey}.`);
-      }
-
-      const normalized = Array.isArray(payload.data)
-        ? payload.data
-        : Array.isArray(payload.data?.applications)
-          ? payload.data.applications
-          : Array.isArray(payload.data?.users)
-            ? payload.data.users
-            : [];
-
-      setTabData((current) => ({
-        ...current,
-        [tabKey]: { data: normalized, loading: false, error: '' }
-      }));
-    } catch (error) {
-      setTabData((current) => ({
-        ...current,
-        [tabKey]: { ...current[tabKey], loading: false, error: error.message || 'Unexpected error' }
-      }));
-    }
-  };
-
-  useEffect(() => {
-    if (checkingSession) return;
-    fetchTab(active);
-  }, [checkingSession, active]);
-
-  const refreshAll = async () => {
-    await Promise.all(navItems.map((item) => fetchTab(item.key, true)));
-  };
-
-  const companies = tabData.companies.data;
-  const applications = tabData.applications.data;
-  const fields = tabData.fields.data;
-  const users = tabData.users.data;
-  const files = tabData.upload.data;
-
+  const applications = useMemo(
+    () => data.flatMap((company) => company.applications.map((app) => ({ ...app, companyName: company.name }))),
+    [data]
+  );
+  const fields = useMemo(() => applications.flatMap((app) => app.fields || []).map((field) => ({ ...field, appName: applications.find((app) => app.id === field.applicationId)?.name || '-' })), [applications]);
+  const records = useMemo(
+    () => applications.flatMap((app) => (app.records || []).map((record) => ({ ...record, appName: app.name }))),
+    [applications]
+  );
   const selectedApplication = useMemo(
     () => applications.find((entry) => entry.id === selectedApp),
     [applications, selectedApp]
   );
+
+  const refresh = async () => {
+    const response = await fetch('/api/companies');
+    if (response.ok) setData(await response.json());
+  };
+
+  useEffect(() => {
+    if (checkingSession) return;
+    refresh();
+  }, [checkingSession]);
 
   const onLogout = async () => {
     setIsLoggingOut(true);
@@ -155,28 +107,27 @@ export default function AdminPage() {
     await fetch('/api/companies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: companyName }) });
     setCompanyModal(false);
     setCompanyName('');
-    refreshAll();
+    refresh();
   };
 
   const createApp = async () => {
     await fetch(`/api/companies/${selectedCompany}/applications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: appName }) });
     setAppModal(false);
     setAppName('');
-    refreshAll();
+    refresh();
   };
 
   const createField = async () => {
     await fetch(`/api/applications/${selectedApp}/fields`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fieldForm) });
     setFieldModal(false);
     setFieldForm({ name: '', type: 'text' });
-    refreshAll();
+    refresh();
   };
 
   const createUser = async () => {
     await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...userForm, role: 'user' }) });
     setUserModal(false);
     setUserForm({ username: '', password: '' });
-    fetchTab('users', true);
   };
 
   const createRecord = async () => {
@@ -188,16 +139,36 @@ export default function AdminPage() {
     await fetch(`/api/applications/${selectedApp}/records`, { method: 'POST', body: formData });
     setRecordTextValues({});
     setRecordFiles({});
-    fetchTab('upload', true);
+    refresh();
   };
 
   const openDelete = (type, id, label) => setConfirmModal({ open: true, type, id, label });
 
   const optimisticDelete = (type, id) => {
-    if (type === 'company') setTabData((current) => ({ ...current, companies: { ...current.companies, data: current.companies.data.filter((entry) => entry.id !== id) } }));
-    if (type === 'application') setTabData((current) => ({ ...current, applications: { ...current.applications, data: current.applications.data.filter((entry) => entry.id !== id) } }));
-    if (type === 'field') setTabData((current) => ({ ...current, fields: { ...current.fields, data: current.fields.data.filter((entry) => entry.id !== id) } }));
-    if (type === 'data') setTabData((current) => ({ ...current, upload: { ...current.upload, data: current.upload.data.filter((entry) => entry.id !== id) } }));
+    if (type === 'company') {
+      setData((current) => current.filter((entry) => entry.id !== id));
+      return;
+    }
+
+    if (type === 'application') {
+      setData((current) => current.map((company) => ({ ...company, applications: company.applications.filter((app) => app.id !== id) })));
+      return;
+    }
+
+    if (type === 'field') {
+      setData((current) => current.map((company) => ({
+        ...company,
+        applications: company.applications.map((app) => ({ ...app, fields: (app.fields || []).filter((field) => field.id !== id) }))
+      })));
+      return;
+    }
+
+    if (type === 'data') {
+      setData((current) => current.map((company) => ({
+        ...company,
+        applications: company.applications.map((app) => ({ ...app, records: (app.records || []).filter((record) => record.id !== id) }))
+      })));
+    }
   };
 
   const executeDelete = async () => {
@@ -225,7 +196,7 @@ export default function AdminPage() {
       optimisticDelete(type, id);
       setConfirmModal({ open: false, type: '', id: '', label: '' });
       setStatusMessage('Deletion completed successfully.');
-      refreshAll();
+      refresh();
     } catch {
       setStatusMessage('Delete request failed. Please retry.');
     } finally {
@@ -233,18 +204,7 @@ export default function AdminPage() {
     }
   };
 
-  const filteredRows = useMemo(() => {
-    const q = search.toLowerCase();
-    if (!q) return { companies, applications, fields, users, files };
-
-    return {
-      companies: companies.filter((entry) => entry.name.toLowerCase().includes(q)),
-      applications: applications.filter((entry) => `${entry.name} ${entry.companyName || ''}`.toLowerCase().includes(q)),
-      fields: fields.filter((entry) => `${entry.name} ${entry.type} ${entry.applicationName || ''} ${entry.companyName || ''}`.toLowerCase().includes(q)),
-      users: users.filter((entry) => `${entry.username} ${entry.role}`.toLowerCase().includes(q)),
-      files: files.filter((entry) => `${entry.fileName} ${entry.applicationName || ''} ${entry.companyName || ''} ${entry.fieldName || ''}`.toLowerCase().includes(q))
-    };
-  }, [applications, companies, fields, files, search, users]);
+  const filteredCompanies = data.filter((company) => company.name.toLowerCase().includes(search.toLowerCase()));
 
   if (checkingSession) {
     return (
@@ -253,8 +213,6 @@ export default function AdminPage() {
       </main>
     );
   }
-
-  const activeState = tabData[active];
 
   return (
     <main className="admin-shell">
@@ -292,7 +250,7 @@ export default function AdminPage() {
 
         <Card>
           <div className="row">
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${active}`} />
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search companies" />
             <Button onClick={() => setCompanyModal(true)}>New Company</Button>
             <Button variant="secondary" onClick={() => setAppModal(true)}>New Application</Button>
             <Button variant="secondary" onClick={() => setFieldModal(true)}>New Field</Button>
@@ -300,97 +258,75 @@ export default function AdminPage() {
           </div>
         </Card>
 
-        {activeState.error ? <p className="error section-gap">{activeState.error}</p> : null}
-        {activeState.loading ? <Card className="section-gap">Loading {active}...</Card> : null}
-
-        {!activeState.loading && active === 'companies' ? (
-          <Card className="stack section-gap">
+        <div className="grid-2 section-gap">
+          <Card className="stack">
             <h2>Companies Management</h2>
             <DataTable
               columns={[
                 { key: 'name', label: 'Company Name' },
-                { key: 'apps', label: 'Applications', render: (row) => row.applications?.length || 0 },
+                { key: 'apps', label: 'Applications', render: (row) => row.applications.length },
                 { key: 'actions', label: 'Actions', render: (row) => <Button onClick={() => openDelete('company', row.id, row.name)}>Delete</Button> }
               ]}
-              data={filteredRows.companies}
+              data={filteredCompanies}
             />
           </Card>
-        ) : null}
-
-        {!activeState.loading && active === 'applications' ? (
-          <Card className="stack section-gap">
+          <Card className="stack">
             <h2>Applications per Company</h2>
             <DataTable
               columns={[
                 { key: 'name', label: 'Application' },
                 { key: 'companyName', label: 'Company' },
-                { key: 'fieldCount', label: 'Fields' },
+                { key: 'fields', label: 'Fields', render: (row) => row.fields?.length || 0 },
                 { key: 'actions', label: 'Actions', render: (row) => <Button onClick={() => openDelete('application', row.id, row.name)}>Delete</Button> }
               ]}
-              data={filteredRows.applications}
+              data={applications}
             />
           </Card>
-        ) : null}
+        </div>
 
-        {!activeState.loading && active === 'fields' ? (
-          <Card className="stack section-gap">
+        <div className="grid-2 section-gap">
+          <Card className="stack">
             <h2>Dynamic Fields Management</h2>
-            {filteredRows.fields.map((field) => (
+            {fields.map((field) => (
               <div className="row" key={field.id}>
-                <Badge>{field.name} · {field.type} · {field.applicationName} · {field.companyName}</Badge>
+                <Badge>{field.name} · {field.type} · {field.appName}</Badge>
                 <Button variant="secondary" onClick={() => openDelete('field', field.id, field.name)}>Delete</Button>
               </div>
             ))}
           </Card>
-        ) : null}
-
-        {!activeState.loading && active === 'users' ? (
-          <Card className="stack section-gap">
-            <h2>Users</h2>
+          <Card className="stack">
+            <h2>Data Listing</h2>
             <DataTable
               columns={[
-                { key: 'username', label: 'Username' },
-                { key: 'role', label: 'Role' },
-                { key: 'createdAt', label: 'Created At', render: (row) => new Date(row.createdAt).toLocaleString() }
+                { key: 'appName', label: 'Application' },
+                { key: 'id', label: 'Record ID' },
+                {
+                  key: 'actions',
+                  label: 'Actions',
+                  render: (row) => <Button variant="secondary" onClick={() => openDelete('data', row.id, `${row.appName} / ${row.id}`)}>Delete</Button>
+                }
               ]}
-              data={filteredRows.users}
+              data={records}
             />
           </Card>
-        ) : null}
+        </div>
 
-        {!activeState.loading && active === 'upload' ? (
-          <div className="grid-2 section-gap">
-            <Card className="stack">
-              <h2>File Upload (PDF & Images)</h2>
-              <select className="select" value={selectedApp} onChange={(event) => setSelectedApp(event.target.value)}>
-                <option value="">Select application</option>
-                {applications.map((app) => <option key={app.id} value={app.id}>{app.name} · {app.companyName}</option>)}
-              </select>
-              {selectedApplication?.fields?.map((field) => (
-                <div key={field.id}>
-                  <strong>{field.name}</strong>
-                  {field.type === 'text'
-                    ? <Input onChange={(event) => setRecordTextValues({ ...recordTextValues, [field.id]: event.target.value })} />
-                    : <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles({ ...recordFiles, [field.id]: event.target.files?.[0] })} />}
-                </div>
-              ))}
-              <Button onClick={createRecord} disabled={!selectedApp}>Upload Record</Button>
-            </Card>
-            <Card className="stack">
-              <h2>Uploaded Files by Association</h2>
-              <DataTable
-                columns={[
-                  { key: 'fileName', label: 'File' },
-                  { key: 'fieldName', label: 'Field' },
-                  { key: 'applicationName', label: 'Application' },
-                  { key: 'companyName', label: 'Company' },
-                  { key: 'createdAt', label: 'Uploaded At', render: (row) => new Date(row.createdAt).toLocaleString() }
-                ]}
-                data={filteredRows.files}
-              />
-            </Card>
-          </div>
-        ) : null}
+        <div className="grid-2 section-gap">
+          <Card className="stack">
+            <h2>File Upload (PDF & Images)</h2>
+            <select className="select" value={selectedApp} onChange={(event) => setSelectedApp(event.target.value)}>
+              <option value="">Select application</option>
+              {applications.map((app) => <option key={app.id} value={app.id}>{app.name} · {app.companyName}</option>)}
+            </select>
+            {selectedApplication?.fields?.map((field) => (
+              <div key={field.id}>
+                <strong>{field.name}</strong>
+                {field.type === 'text' ? <Input onChange={(event) => setRecordTextValues({ ...recordTextValues, [field.id]: event.target.value })} /> : <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles({ ...recordFiles, [field.id]: event.target.files?.[0] })} />}
+              </div>
+            ))}
+            <Button onClick={createRecord} disabled={!selectedApp}>Upload Record</Button>
+          </Card>
+        </div>
       </section>
 
       <Modal open={companyModal} onClose={() => setCompanyModal(false)} title="Create Company">
@@ -401,7 +337,7 @@ export default function AdminPage() {
       <Modal open={appModal} onClose={() => setAppModal(false)} title="Create Application">
         <select className="select" value={selectedCompany} onChange={(event) => setSelectedCompany(event.target.value)}>
           <option value="">Select company</option>
-          {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+          {data.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
         </select>
         <Input placeholder="Application name" value={appName} onChange={(event) => setAppName(event.target.value)} />
         <Button onClick={createApp} disabled={!selectedCompany || !appName.trim()}>Create</Button>

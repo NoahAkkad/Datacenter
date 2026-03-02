@@ -34,7 +34,7 @@ function LoginContent() {
     }
 
     const payload = await response.json();
-    const destination = payload.data?.role === 'admin' ? '/admin' : '/dashboard';
+    const destination = payload.role === 'admin' ? '/admin' : '/dashboard';
     router.push(destination);
     router.refresh();
   };

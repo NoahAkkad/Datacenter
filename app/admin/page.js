@@ -73,6 +73,26 @@ export default function AdminPage() {
     [data]
   );
 
+  const companyById = useMemo(
+    () => Object.fromEntries(data.map((company) => [company.id, company])),
+    [data]
+  );
+
+  const tagRows = useMemo(() => {
+    const byId = new Map();
+    applications.forEach((application) => {
+      (application.tags || []).forEach((tag) => {
+        if (byId.has(tag.id)) return;
+        byId.set(tag.id, {
+          ...tag,
+          applicationName: tag.allApplications ? 'All Applications' : application.name,
+          companyName: companyById[tag.companyId]?.name || application.companyName || 'Unknown Company'
+        });
+      });
+    });
+    return Array.from(byId.values());
+  }, [applications, companyById]);
+
   const fields = useMemo(
     () => applications
       .flatMap((app) => app.fields || [])
@@ -220,11 +240,14 @@ export default function AdminPage() {
 
   const createTag = async () => {
     setStatusMessage('');
+    const isAllApplications = tagForm.applicationId.startsWith('__all__::');
+    const selectedCompanyId = isAllApplications ? tagForm.applicationId.replace('__all__::', '') : (applications.find((application) => application.id === tagForm.applicationId)?.companyId || '');
+    const endpointId = isAllApplications ? 'all' : tagForm.applicationId;
     try {
-      const response = await fetch(`/api/applications/${tagForm.applicationId}/tags`, {
+      const response = await fetch(`/api/applications/${endpointId}/tags`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: tagForm.name, description: tagForm.description })
+        body: JSON.stringify({ name: tagForm.name, description: tagForm.description, companyId: selectedCompanyId })
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -340,7 +363,7 @@ export default function AdminPage() {
     if (type === 'company') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Company' });
     if (type === 'application') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Application' });
     if (type === 'field') setEditing({ open: true, type, id: row.id, payload: { name: row.name, tagId: row.tagId || '' }, title: 'Edit Field' });
-    if (type === 'tag') setEditing({ open: true, type, id: row.id, payload: { name: row.name, description: row.description || '' }, title: 'Edit Tag' });
+    if (type === 'tag') setEditing({ open: true, type, id: row.id, payload: { name: row.name, description: row.description || '', allApplications: Boolean(row.allApplications) }, title: 'Edit Tag' });
     if (type === 'data') setEditing({ open: true, type, id: row.id, payload: { values: row.values || {} }, title: `Edit Record ${row.id}` });
     if (type === 'user') setEditing({ open: true, type, id: row.id, payload: { username: row.username, password: '' }, title: 'Edit User' });
   };
@@ -655,9 +678,9 @@ export default function AdminPage() {
               </div>
             ))}
             <h3 className="section-mini-gap">Tag Management</h3>
-            {applications.flatMap((application) => (application.tags || []).map((tag) => ({ ...tag, applicationName: application.name }))).map((tag) => (
+            {tagRows.map((tag) => (
               <div className="row" key={tag.id}>
-                <Badge>{tag.name} · {tag.applicationName}</Badge>
+                <Badge>{tag.name} · {tag.applicationName} · {tag.companyName}{tag.allApplications ? ' · Global' : ''}</Badge>
                 <div className="row"><Button variant="secondary" onClick={() => openEdit('tag', tag)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('tag', tag.id, tag.name)}>Delete</Button></div>
               </div>
             ))}
@@ -809,8 +832,12 @@ export default function AdminPage() {
       <Modal open={tagModal} onClose={() => setTagModal(false)} title="Create Tag">
         <select className="select" value={tagForm.applicationId} onChange={(event) => setTagForm((current) => ({ ...current, applicationId: event.target.value }))}>
           <option value="">Select application</option>
-          {applications.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}
+          {data.map((company) => [
+            <option key={`all-${company.id}`} value={`__all__::${company.id}`}>All Applications ({company.name})</option>,
+            ...company.applications.map((app) => <option key={app.id} value={app.id}>{app.name} ({company.name})</option>)
+          ])}
         </select>
+        <p className="subtitle">Tip: All Applications creates a global tag for all current and future apps in that company.</p>
         <Input placeholder="Tag name" value={tagForm.name} onChange={(event) => setTagForm((current) => ({ ...current, name: event.target.value }))} />
         <Input placeholder="Description (optional)" value={tagForm.description} onChange={(event) => setTagForm((current) => ({ ...current, description: event.target.value }))} />
         <Button onClick={createTag} disabled={!tagForm.applicationId || !tagForm.name.trim()}>Create Tag</Button>
@@ -836,6 +863,10 @@ export default function AdminPage() {
         {editing.type === 'tag' ? <>
           <Input placeholder="Tag name" value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} />
           <Input placeholder="Description (optional)" value={editing.payload.description || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, description: event.target.value } }))} />
+          <label className="row" style={{ gap: '8px' }}>
+            <input type="checkbox" checked={Boolean(editing.payload.allApplications)} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, allApplications: event.target.checked } }))} />
+            All Applications (global tag)
+          </label>
         </> : null}
         {editing.type === 'user' ? <>
           <Input placeholder="Username" value={editing.payload.username || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, username: event.target.value } }))} />

@@ -89,21 +89,26 @@ export default function ApplicationDetailsPage() {
         <Card><p className="error">{error}</p></Card>
       ) : null}
 
-      {application?.records?.length === 0 ? (
+      {!application?.groupedFields || Object.keys(application.groupedFields).length === 0 ? (
         <Card><p className="subtitle">No records available.</p></Card>
       ) : (
         <Card>
           <div className="stack section-mini-gap">
-            {application.records[0].fields.map((field) => (
-              <div key={`${field.label}-${field.type}`} className="field-row">
-                <strong>{field.label}</strong>
-                {field.type === 'text' ? (
-                  <span>{field.value}</span>
-                ) : field.type === 'pdf' ? (
-                  <a className="link" href={field.fileUrl} target="_blank" rel="noreferrer">Open PDF</a>
-                ) : (
-                  <button className="button secondary" onClick={() => setImagePreview(field.fileUrl)}>Preview Image</button>
-                )}
+            {Object.entries(application.groupedFields).map(([tagName, tagFields]) => (
+              <div key={tagName} className="stack section-mini-gap">
+                <h3>{tagName}</h3>
+                {tagFields.map((field) => (
+                  <div key={`${tagName}-${field.label}-${field.type}`} className="field-row">
+                    <strong>{field.label}</strong>
+                    {field.type === 'text' ? (
+                      <span>{field.value}</span>
+                    ) : field.type === 'pdf' ? (
+                      field.fileUrl ? <a className="link" href={field.fileUrl} target="_blank" rel="noreferrer">Open PDF</a> : <span>—</span>
+                    ) : (
+                      field.fileUrl ? <button className="button secondary" onClick={() => setImagePreview(field.fileUrl)}>Preview Image</button> : <span>—</span>
+                    )}
+                  </div>
+                ))}
               </div>
             ))}
           </div>

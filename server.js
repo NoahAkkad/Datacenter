@@ -146,6 +146,7 @@ function ensureDefaultTag(db, application) {
     description: 'Default tag for ungrouped fields.',
     applicationId: application.id,
     companyId: application.companyId,
+    allApplications: false,
     createdAt: now,
     updatedAt: now
   };
@@ -160,13 +161,21 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
   return fields
     .map((field) => {
       const rawValue = recordValues[field.id];
-      if (!rawValue) return null;
-
       const matchedTag = tagById.get(field.tagId) || null;
       const tagLabel = matchedTag?.name || field.tagName || 'General';
 
       if (field.type === 'text') {
-        return { label: field.name, type: 'text', value: String(rawValue), tagId: matchedTag?.id || null, tagName: tagLabel };
+        return {
+          label: field.name,
+          type: 'text',
+          value: rawValue === undefined || rawValue === null ? '—' : String(rawValue),
+          tagId: matchedTag?.id || null,
+          tagName: tagLabel
+        };
+      }
+
+      if (!rawValue || !rawValue.url) {
+        return { label: field.name, type: field.type, fileUrl: '', tagId: matchedTag?.id || null, tagName: tagLabel, empty: true };
       }
 
       return {
@@ -178,6 +187,14 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
       };
     })
     .filter(Boolean);
+}
+
+function tagsForApplication(db, application) {
+  return (db.tags || []).filter((tag) => tag.applicationId === application.id || (tag.allApplications === true && tag.companyId === application.companyId));
+}
+
+function fieldsForApplication(db, application) {
+  return (db.fields || []).filter((field) => field.applicationId === application.id || (field.allApplications === true && field.companyId === application.companyId));
 }
 
 function getConsolidatedRecord(records = []) {
@@ -228,7 +245,8 @@ app.prepare().then(() => {
     if (!Array.isArray(db.tags)) {
       db.tags = [];
     }
-    db.tags = db.tags.map((tag) => ensureTimestamps(tag, now));
+    db.tags = db.tags.map((tag) => ({ ...ensureTimestamps(tag, now), allApplications: tag.allApplications === true }));
+    db.fields = (db.fields || []).map((field) => ({ ...field, allApplications: field.allApplications === true }));
 
     return db;
   });
@@ -291,8 +309,8 @@ app.prepare().then(() => {
         .filter((appEntry) => appEntry.companyId === company.id)
         .map((appEntry) => ({
           ...appEntry,
-          tags: db.tags.filter((tag) => tag.applicationId === appEntry.id),
-          fields: db.fields.filter((field) => field.applicationId === appEntry.id),
+          tags: tagsForApplication(db, appEntry),
+          fields: fieldsForApplication(db, appEntry),
           records: (() => {
             const mergedRecord = getConsolidatedRecord(db.records.filter((record) => record.applicationId === appEntry.id));
             return mergedRecord ? [mergedRecord] : [];
@@ -328,19 +346,18 @@ app.prepare().then(() => {
       return;
     }
 
-    const fields = db.fields.filter((field) => field.applicationId === application.id);
-    const tags = db.tags.filter((tag) => tag.applicationId === application.id);
+    const fields = fieldsForApplication(db, application);
+    const tags = tagsForApplication(db, application);
     const company = db.companies.find((entry) => entry.id === application.companyId);
     const mergedRecord = getConsolidatedRecord(db.records.filter((record) => record.applicationId === application.id));
-    const records = mergedRecord
-      ? [{
-        createdAt: mergedRecord.createdAt,
-        updatedAt: mergedRecord.updatedAt,
-        fields: normalizeRecordFields(fields, tags, mergedRecord.values)
-      }]
-      : [];
+    const normalizedFields = normalizeRecordFields(fields, tags, mergedRecord?.values || {});
+    const records = [{
+      createdAt: mergedRecord?.createdAt || null,
+      updatedAt: mergedRecord?.updatedAt || null,
+      fields: normalizedFields
+    }];
 
-    const groupedFields = records[0]?.fields.reduce((accumulator, field) => {
+    const groupedFields = normalizedFields.reduce((accumulator, field) => {
       const groupName = field.tagName || 'General';
       if (!accumulator[groupName]) {
         accumulator[groupName] = [];
@@ -394,6 +411,7 @@ app.prepare().then(() => {
       description: 'Default tag for ungrouped fields.',
       applicationId: application.id,
       companyId,
+      allApplications: false,
       createdAt: now,
       updatedAt: now
     };
@@ -419,7 +437,7 @@ app.prepare().then(() => {
       return;
     }
 
-    const tags = db.tags.filter((tag) => tag.applicationId === applicationId);
+    const tags = tagsForApplication(db, application);
     res.json({ tags });
   });
 
@@ -427,10 +445,23 @@ app.prepare().then(() => {
     const { applicationId } = req.params;
     const nextName = sanitizeText(req.body?.name);
     const nextDescription = sanitizeText(req.body?.description);
+    const companyIdFromBody = sanitizeText(req.body?.companyId);
+    const isAllApplications = applicationId === 'all';
     const db = readDb();
-    const application = db.applications.find((entry) => entry.id === applicationId);
+    const application = isAllApplications ? null : db.applications.find((entry) => entry.id === applicationId);
+    const companyId = isAllApplications ? companyIdFromBody : application?.companyId;
 
-    if (!application) {
+    if (!companyId) {
+      res.status(400).json({ error: 'Company is required' });
+      return;
+    }
+
+    if (!db.companies.find((entry) => entry.id === companyId)) {
+      res.status(404).json({ error: 'Company not found' });
+      return;
+    }
+
+    if (!isAllApplications && !application) {
       res.status(404).json({ error: 'Application not found' });
       return;
     }
@@ -440,9 +471,12 @@ app.prepare().then(() => {
       return;
     }
 
-    const duplicate = db.tags.find((tag) => tag.applicationId === applicationId && normalizeTagName(tag.name) === normalizeTagName(nextName));
+    const duplicate = db.tags.find((tag) => tag.companyId === companyId
+      && tag.allApplications === isAllApplications
+      && (isAllApplications || tag.applicationId === applicationId)
+      && normalizeTagName(tag.name) === normalizeTagName(nextName));
     if (duplicate) {
-      res.status(409).json({ error: 'Tag name already exists in this application' });
+      res.status(409).json({ error: isAllApplications ? 'Tag name already exists for all applications in this company' : 'Tag name already exists in this application' });
       return;
     }
 
@@ -451,8 +485,9 @@ app.prepare().then(() => {
       id: nextId('tag'),
       name: nextName,
       description: nextDescription,
-      applicationId,
-      companyId: application.companyId,
+      applicationId: isAllApplications ? null : applicationId,
+      companyId,
+      allApplications: isAllApplications,
       createdAt: now,
       updatedAt: now
     };
@@ -469,6 +504,7 @@ app.prepare().then(() => {
     const id = sanitizeText(req.params.id);
     const nextName = sanitizeText(req.body?.name);
     const nextDescription = sanitizeText(req.body?.description);
+    const nextAllApplications = req.body?.allApplications === true;
     const db = readDb();
     const tag = (db.tags || []).find((entry) => entry.id === id);
 
@@ -482,19 +518,38 @@ app.prepare().then(() => {
       return;
     }
 
-    const duplicate = (db.tags || []).find((entry) => entry.applicationId === tag.applicationId
+    const duplicate = (db.tags || []).find((entry) => entry.companyId === tag.companyId
       && entry.id !== id
+      && entry.allApplications === nextAllApplications
+      && (nextAllApplications || entry.applicationId === tag.applicationId)
       && normalizeTagName(entry.name) === normalizeTagName(nextName));
     if (duplicate) {
-      res.status(409).json({ error: 'Tag name already exists in this application' });
+      res.status(409).json({ error: 'Tag name already exists in this scope' });
       return;
     }
 
     tag.name = nextName;
     tag.description = nextDescription;
+    tag.allApplications = nextAllApplications;
+    if (nextAllApplications) {
+      tag.applicationId = null;
+    } else if (!tag.applicationId) {
+      const fallbackApplication = db.applications.find((entry) => entry.companyId === tag.companyId);
+      tag.applicationId = fallbackApplication?.id || null;
+    }
     tag.updatedAt = new Date().toISOString();
 
-    db.fields = db.fields.map((field) => (field.tagId === tag.id ? { ...field, tagName: tag.name } : field));
+    db.fields = db.fields.map((field) => {
+      if (field.tagId !== tag.id) return field;
+      const updatedField = { ...field, tagName: tag.name, allApplications: nextAllApplications };
+      if (nextAllApplications) {
+        updatedField.applicationId = null;
+        updatedField.companyId = tag.companyId;
+      } else if (!updatedField.applicationId) {
+        updatedField.applicationId = tag.applicationId;
+      }
+      return updatedField;
+    });
 
     writeDb(db);
     res.json({ success: true, data: tag });
@@ -511,16 +566,18 @@ app.prepare().then(() => {
     }
 
     const linkedFields = db.fields.filter((field) => field.tagId === tag.id);
-    const application = db.applications.find((entry) => entry.id === tag.applicationId);
-    const fallbackTag = application ? ensureDefaultTag(db, application) : null;
 
     linkedFields.forEach((field) => {
+      const fieldApplication = db.applications.find((entry) => entry.id === field.applicationId) || db.applications.find((entry) => entry.companyId === tag.companyId);
+      const fallbackTag = fieldApplication ? ensureDefaultTag(db, fieldApplication) : null;
       if (fallbackTag && fallbackTag.id !== tag.id) {
         field.tagId = fallbackTag.id;
         field.tagName = fallbackTag.name;
+        field.allApplications = false;
       } else {
         field.tagId = null;
         field.tagName = 'General';
+        field.allApplications = false;
       }
     });
 
@@ -567,7 +624,13 @@ app.prepare().then(() => {
     const fieldsToCreate = [];
 
     targetApplicationIds.forEach((targetApplicationId) => {
-      const duplicate = db.fields.find((field) => field.applicationId === targetApplicationId && normalizeFieldName(field.name) === normalizeFieldName(nextName));
+      const duplicate = db.fields.find((field) => {
+        const sameName = normalizeFieldName(field.name) === normalizeFieldName(nextName);
+        if (!sameName) return false;
+        if (field.applicationId === targetApplicationId) return true;
+        const targetApplication = appById.get(targetApplicationId);
+        return field.allApplications === true && field.companyId === targetApplication?.companyId;
+      });
       if (duplicate) {
         duplicateEntries.push({
           applicationId: targetApplicationId,
@@ -581,11 +644,13 @@ app.prepare().then(() => {
       let selectedTag = null;
 
       if (tagId && applicationId !== 'all') {
-        selectedTag = db.tags.find((entry) => entry.id === sanitizeText(tagId) && entry.applicationId === targetApplicationId);
+        selectedTag = db.tags.find((entry) => entry.id === sanitizeText(tagId)
+          && (entry.applicationId === targetApplicationId || (entry.allApplications === true && entry.companyId === application.companyId)));
       }
 
       if (!selectedTag && tagName) {
-        selectedTag = db.tags.find((entry) => entry.applicationId === targetApplicationId && normalizeTagName(entry.name) === normalizeTagName(tagName));
+        selectedTag = db.tags.find((entry) => (entry.applicationId === targetApplicationId || (entry.allApplications === true && entry.companyId === application.companyId))
+          && normalizeTagName(entry.name) === normalizeTagName(tagName));
       }
 
       if (!selectedTag) {
@@ -594,7 +659,9 @@ app.prepare().then(() => {
 
       fieldsToCreate.push({
         id: nextId('fld'),
-        applicationId: targetApplicationId,
+        applicationId: selectedTag.allApplications ? null : targetApplicationId,
+        companyId: application.companyId,
+        allApplications: selectedTag.allApplications === true,
         name: nextName,
         type,
         tagId: selectedTag.id,
@@ -627,9 +694,10 @@ app.prepare().then(() => {
   server.post('/api/applications/:applicationId/records', authRequired, requireRole('admin'), upload.any(), (req, res) => {
     const { applicationId } = req.params;
     const db = readDb();
-    const applicationFields = db.fields.filter((f) => f.applicationId === applicationId);
+    const application = db.applications.find((a) => a.id === applicationId);
+    const applicationFields = application ? fieldsForApplication(db, application) : [];
 
-    if (!db.applications.find((a) => a.id === applicationId)) {
+    if (!application) {
       res.status(404).json({ error: 'Application not found' });
       return;
     }
@@ -701,9 +769,9 @@ app.prepare().then(() => {
 
     const companyApplications = db.applications.filter((application) => application.companyId === id);
     const applicationsPayload = companyApplications.map((application) => {
-      const applicationTags = db.tags.filter((tag) => tag.applicationId === application.id);
+      const applicationTags = tagsForApplication(db, application);
       const applicationFields = db.fields
-        .filter((field) => field.applicationId === application.id)
+        .filter((field) => field.applicationId === application.id || (field.allApplications === true && field.companyId === application.companyId))
         .map((field) => {
           const matchedTag = applicationTags.find((tag) => tag.id === field.tagId);
           return {
@@ -936,13 +1004,20 @@ app.prepare().then(() => {
         field.tagId = defaultTag?.id || null;
         field.tagName = defaultTag?.name || 'General';
       } else {
-        const matchedTag = db.tags.find((tag) => tag.id === nextTagId && tag.applicationId === field.applicationId);
+        const fieldApplication = db.applications.find((entry) => entry.id === field.applicationId) || db.applications.find((entry) => entry.companyId === field.companyId);
+        const matchedTag = db.tags.find((tag) => tag.id === nextTagId
+          && (tag.applicationId === field.applicationId || (tag.allApplications === true && tag.companyId === fieldApplication?.companyId)));
         if (!matchedTag) {
           res.status(400).json({ error: 'Tag not found for this application' });
           return;
         }
         field.tagId = matchedTag.id;
         field.tagName = matchedTag.name;
+        field.allApplications = matchedTag.allApplications === true;
+        if (matchedTag.allApplications === true) {
+          field.applicationId = null;
+          field.companyId = matchedTag.companyId;
+        }
       }
     }
 

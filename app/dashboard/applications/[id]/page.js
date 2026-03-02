@@ -29,6 +29,7 @@ export default function ApplicationDetailsPage() {
   const [application, setApplication] = useState(null);
   const [error, setError] = useState('');
   const [imagePreview, setImagePreview] = useState('');
+  const [collapsedSections, setCollapsedSections] = useState({});
 
   useEffect(() => {
     const loadApplication = async () => {
@@ -100,16 +101,24 @@ export default function ApplicationDetailsPage() {
               <p className="subtitle">Record created: {formatTimestamp(application.records[0].createdAt)}</p>
               <p className="subtitle">Record last modified: {formatTimestamp(application.records[0].updatedAt)}</p>
             </div>
-            {application.records[0].fields.map((field) => (
-              <div key={`${field.label}-${field.type}`} className="field-row">
-                <strong>{field.label}</strong>
-                {field.type === 'text' ? (
-                  <span>{field.value}</span>
-                ) : field.type === 'pdf' ? (
-                  <a className="link" href={field.fileUrl} target="_blank" rel="noreferrer">Open PDF</a>
-                ) : (
-                  <button className="button secondary" onClick={() => setImagePreview(field.fileUrl)}>Preview Image</button>
-                )}
+            {Object.entries(application.groupedFields || {}).map(([tagName, groupedFields]) => (
+              <div key={tagName} className="tag-section">
+                <button className="tag-header" onClick={() => setCollapsedSections((current) => ({ ...current, [tagName]: !current[tagName] }))}>
+                  <strong>{tagName}</strong>
+                  <span>{collapsedSections[tagName] ? '+' : '−'}</span>
+                </button>
+                {!collapsedSections[tagName] ? groupedFields.map((field) => (
+                  <div key={`${tagName}-${field.label}-${field.type}`} className="field-row">
+                    <strong>{field.label}</strong>
+                    {field.type === 'text' ? (
+                      <span>{field.value}</span>
+                    ) : field.type === 'pdf' ? (
+                      <a className="link" href={field.fileUrl} target="_blank" rel="noreferrer">Open PDF</a>
+                    ) : (
+                      <button className="button secondary" onClick={() => setImagePreview(field.fileUrl)}>Preview Image</button>
+                    )}
+                  </div>
+                )) : null}
               </div>
             ))}
           </div>

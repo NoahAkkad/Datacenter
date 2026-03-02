@@ -85,6 +85,26 @@ function logUpdateIssue(entity, message, meta = {}) {
   console.error(`[update:${entity}] ${message}`, meta);
 }
 
+function logUpdateAttempt(entity, id, changes, user) {
+  // eslint-disable-next-line no-console
+  console.info('[update:attempt]', {
+    entity,
+    id,
+    requestedBy: user?.id || 'unknown',
+    changes
+  });
+}
+
+function logUpdateSuccess(entity, id, result, user) {
+  // eslint-disable-next-line no-console
+  console.info('[update:success]', {
+    entity,
+    id,
+    requestedBy: user?.id || 'unknown',
+    updated: result
+  });
+}
+
 function sendUpdateSuccess(res, data) {
   res.status(200).json({ success: true, data });
 }
@@ -433,6 +453,8 @@ app.prepare().then(() => {
       return;
     }
 
+    logUpdateAttempt('company', id, req.body, req.user);
+
     const nextName = sanitizeText(req.body?.name);
     if (!nextName) {
       res.status(400).json({ error: 'Company name is required' });
@@ -449,6 +471,7 @@ app.prepare().then(() => {
 
     company.name = nextName;
     writeDb(db);
+    logUpdateSuccess('company', id, { name: company.name }, req.user);
     sendUpdateSuccess(res, company);
   };
 
@@ -464,6 +487,14 @@ app.prepare().then(() => {
       res.status(400).json({ error: 'Invalid ID' });
       return;
     }
+
+    if (!req.body || typeof req.body !== 'object') {
+      logUpdateIssue('application', 'Invalid request body', { id, bodyType: typeof req.body });
+      res.status(400).json({ error: 'Invalid request body' });
+      return;
+    }
+
+    logUpdateAttempt('application', id, req.body, req.user);
 
     const nextName = sanitizeText(req.body?.name);
     if (!nextName) {
@@ -481,6 +512,7 @@ app.prepare().then(() => {
 
     application.name = nextName;
     writeDb(db);
+    logUpdateSuccess('application', id, { name: application.name }, req.user);
     sendUpdateSuccess(res, application);
   };
 
@@ -497,6 +529,14 @@ app.prepare().then(() => {
       res.status(400).json({ error: 'Invalid ID' });
       return;
     }
+
+    if (!req.body || typeof req.body !== 'object') {
+      logUpdateIssue('field', 'Invalid request body', { id, bodyType: typeof req.body });
+      res.status(400).json({ error: 'Invalid request body' });
+      return;
+    }
+
+    logUpdateAttempt('field', id, req.body, req.user);
 
     const db = readDb();
     const field = db.fields.find((entry) => entry.id === id);
@@ -539,6 +579,7 @@ app.prepare().then(() => {
     }
 
     writeDb(db);
+    logUpdateSuccess('field', id, field, req.user);
     sendUpdateSuccess(res, field);
   };
 
@@ -554,6 +595,14 @@ app.prepare().then(() => {
       res.status(400).json({ error: 'Invalid ID' });
       return;
     }
+
+    if (!req.body || typeof req.body !== 'object') {
+      logUpdateIssue('record', 'Invalid request body', { id, bodyType: typeof req.body });
+      res.status(400).json({ error: 'Invalid request body' });
+      return;
+    }
+
+    logUpdateAttempt('record', id, req.body, req.user);
 
     const db = readDb();
     const record = db.records.find((entry) => entry.id === id);
@@ -593,6 +642,7 @@ app.prepare().then(() => {
     });
 
     writeDb(db);
+    logUpdateSuccess('record', id, { values: record.values }, req.user);
     sendUpdateSuccess(res, record);
   };
 
@@ -608,6 +658,14 @@ app.prepare().then(() => {
       res.status(400).json({ error: 'Invalid ID' });
       return;
     }
+
+    if (!req.body || typeof req.body !== 'object') {
+      logUpdateIssue('user', 'Invalid request body', { id, bodyType: typeof req.body });
+      res.status(400).json({ error: 'Invalid request body' });
+      return;
+    }
+
+    logUpdateAttempt('user', id, req.body, req.user);
 
     const db = readDb();
     const user = db.users.find((entry) => entry.id === id);
@@ -642,6 +700,7 @@ app.prepare().then(() => {
     }
 
     writeDb(db);
+    logUpdateSuccess('user', id, { username: user.username, passwordUpdated: req.body?.password !== undefined }, req.user);
     sendUpdateSuccess(res, { id: user.id, username: user.username, role: user.role });
   };
 

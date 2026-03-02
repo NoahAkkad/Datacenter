@@ -7,15 +7,23 @@ import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import { Modal } from '../../components/ui/modal';
 import { ApplicationList } from '../../components/ApplicationList';
+import { UserSidebar } from '../../components/UserSidebar';
 
 export default function DashboardPage() {
   const router = useRouter();
+  const [collapsed, setCollapsed] = useState(false);
+  const [active, setActive] = useState('home');
   const [query, setQuery] = useState('');
   const [applications, setApplications] = useState([]);
   const [checkingSession, setCheckingSession] = useState(true);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    setActive(tab === 'applications' ? 'applications' : 'home');
+  }, []);
 
   useEffect(() => {
     const validateSession = async () => {
@@ -70,6 +78,14 @@ export default function DashboardPage() {
     }
   };
 
+  const onSidebarNavigate = (tab) => {
+    setActive(tab);
+    if (tab === 'home') {
+      setQuery('');
+      setError('');
+    }
+  };
+
   const filteredCountLabel = useMemo(() => `${applications.length} application${applications.length === 1 ? '' : 's'}`, [applications]);
 
   if (checkingSession) {
@@ -81,28 +97,48 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="user-wrap">
-      <header className="dashboard-header">
-        <div>
-          <h1 className="title">Applications</h1>
-          <p className="subtitle">View available applications and open details.</p>
-        </div>
-        <Button variant="secondary" onClick={() => setLogoutConfirmOpen(true)}>Logout</Button>
-      </header>
+    <main className="admin-shell">
+      <UserSidebar
+        collapsed={collapsed}
+        onToggle={() => setCollapsed((value) => !value)}
+        activeTab={active}
+        onNavigate={onSidebarNavigate}
+      />
 
-      <Card className="stack">
-        <Input
-          placeholder="Search applications"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <p className="subtitle">{filteredCountLabel}</p>
-        {error ? <p className="error">{error}</p> : null}
-      </Card>
+      <section className="main">
+        <header className="dashboard-header">
+          <div>
+            <h1 className="title">User Dashboard</h1>
+            <p className="subtitle">View available applications and open details.</p>
+          </div>
+          <Button variant="secondary" onClick={() => setLogoutConfirmOpen(true)}>Logout</Button>
+        </header>
 
-      <Card className="section-gap">
-        <ApplicationList applications={applications} />
-      </Card>
+        {active === 'home' ? (
+          <Card className="stack">
+            <h2>Welcome Home</h2>
+            <p className="subtitle">Use the sidebar to jump to applications. Selecting Home resets search filters.</p>
+          </Card>
+        ) : null}
+
+        {active === 'home' || active === 'applications' ? (
+          <>
+            <Card className="stack section-gap">
+              <Input
+                placeholder="Search applications"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+              <p className="subtitle">{filteredCountLabel}</p>
+              {error ? <p className="error">{error}</p> : null}
+            </Card>
+
+            <Card className="section-gap">
+              <ApplicationList applications={applications} />
+            </Card>
+          </>
+        ) : null}
+      </section>
 
       <Modal open={logoutConfirmOpen} onClose={() => !isLoggingOut && setLogoutConfirmOpen(false)} title="Confirm Logout">
         <p className="subtitle">Are you sure you want to logout?</p>

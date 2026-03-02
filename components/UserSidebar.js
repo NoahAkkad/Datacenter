@@ -1,0 +1,36 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Button } from './ui/button';
+
+const userMenu = [
+  { key: 'home', label: '🏠 Home', href: '/dashboard' },
+  { key: 'applications', label: '🧩 Applications', href: '/dashboard?tab=applications' }
+];
+
+export function UserSidebar({ collapsed, onToggle, activeTab, onNavigate }) {
+  const pathname = usePathname();
+
+  return (
+    <aside className={`sidebar ${collapsed ? 'compact' : ''}`}>
+      <Button variant="secondary" onClick={onToggle}>{collapsed ? '➡️' : '⬅️'}</Button>
+      <div className="stack sidebar-nav">
+        {userMenu.map((item) => {
+          const isActive = pathname === '/dashboard' && activeTab === item.key;
+
+          return (
+            <Link
+              key={item.key}
+              href={item.href}
+              className={`nav-btn ${isActive ? 'active' : ''}`}
+              onClick={() => onNavigate(item.key)}
+            >
+              {collapsed ? item.label.split(' ')[0] : item.label}
+            </Link>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}

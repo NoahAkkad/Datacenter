@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
@@ -17,6 +18,7 @@ const navItems = [
 ];
 
 export default function AdminPage() {
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [active, setActive] = useState('companies');
   const [data, setData] = useState([]);
@@ -35,6 +37,29 @@ export default function AdminPage() {
   const [appName, setAppName] = useState('');
   const [fieldForm, setFieldForm] = useState({ name: '', type: 'text' });
   const [userForm, setUserForm] = useState({ username: '', password: '' });
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  useEffect(() => {
+    const validateSession = async () => {
+      const response = await fetch('/api/auth/me');
+      if (!response.ok) {
+        router.replace('/login?portal=admin');
+        return;
+      }
+
+      const user = await response.json();
+      if (user.role !== 'admin') {
+        router.replace('/dashboard');
+        return;
+      }
+      setCheckingSession(false);
+    };
+
+    validateSession();
+  }, [router]);
 
   const applications = useMemo(() => data.flatMap((company) => company.applications.map((app) => ({ ...app, companyName: company.name }))), [data]);
   const selectedApplication = useMemo(() => applications.find((entry) => entry.id === selectedApp), [applications, selectedApp]);
@@ -45,8 +70,24 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
+    if (checkingSession) return;
     refresh();
-  }, []);
+  }, [checkingSession]);
+
+  const onLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+    } finally {
+      window.localStorage.removeItem('authToken');
+      window.sessionStorage.removeItem('authToken');
+      setIsLoggingOut(false);
+      setLogoutConfirmOpen(false);
+      setProfileMenuOpen(false);
+      router.replace('/login?portal=admin');
+      router.refresh();
+    }
+  };
 
   const createCompany = async () => {
     await fetch('/api/companies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: companyName }) });
@@ -89,6 +130,14 @@ export default function AdminPage() {
 
   const filteredCompanies = data.filter((company) => company.name.toLowerCase().includes(search.toLowerCase()));
 
+  if (checkingSession) {
+    return (
+      <main className="page-center">
+        <Card>Validating session...</Card>
+      </main>
+    );
+  }
+
   return (
     <main className="admin-shell">
       <aside className={`sidebar ${collapsed ? 'compact' : ''}`}>
@@ -109,8 +158,15 @@ export default function AdminPage() {
             <p className="subtitle">Structured management for all data center entities.</p>
           </div>
           <div className="profile">
-            <strong>Administrator</strong>
-            <p className="subtitle">admin@datacenter.io</p>
+            <button className="profile-trigger" onClick={() => setProfileMenuOpen((value) => !value)}>
+              <strong>Administrator</strong>
+              <p className="subtitle">admin@datacenter.io</p>
+            </button>
+            {profileMenuOpen ? (
+              <div className="profile-menu">
+                <button className="menu-item danger" onClick={() => setLogoutConfirmOpen(true)}>Logout</button>
+              </div>
+            ) : null}
           </div>
         </header>
 
@@ -204,6 +260,14 @@ export default function AdminPage() {
         <Input placeholder="Username" value={userForm.username} onChange={(event) => setUserForm({ ...userForm, username: event.target.value })} />
         <Input type="password" placeholder="Password" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} />
         <Button onClick={createUser} disabled={!userForm.username || !userForm.password}>Create User</Button>
+      </Modal>
+
+      <Modal open={logoutConfirmOpen} onClose={() => !isLoggingOut && setLogoutConfirmOpen(false)} title="Confirm Logout">
+        <p className="subtitle">Are you sure you want to logout from the admin dashboard?</p>
+        <div className="row">
+          <Button variant="secondary" onClick={() => setLogoutConfirmOpen(false)} disabled={isLoggingOut}>Cancel</Button>
+          <Button onClick={onLogout} disabled={isLoggingOut}>{isLoggingOut ? 'Logging out...' : 'Logout'}</Button>
+        </div>
       </Modal>
     </main>
   );

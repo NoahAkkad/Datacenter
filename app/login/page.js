@@ -1,21 +1,24 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 
-export default function LoginPage() {
+function LoginContent() {
   const params = useSearchParams();
   const router = useRouter();
   const portal = params.get('portal') || 'user';
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const onSubmit = async (event) => {
     event.preventDefault();
+    if (loading) return;
     setError('');
+    setLoading(true);
 
     const response = await fetch('/api/auth/login', {
       method: 'POST',
@@ -26,10 +29,14 @@ export default function LoginPage() {
     if (!response.ok) {
       const payload = await response.json();
       setError(payload.error || 'Login failed');
+      setLoading(false);
       return;
     }
 
-    router.push(portal === 'admin' ? '/admin' : '/dashboard');
+    const payload = await response.json();
+    const destination = payload.role === 'admin' ? '/admin' : '/dashboard';
+    router.push(destination);
+    router.refresh();
   };
 
   const isAdmin = portal === 'admin';
@@ -52,10 +59,18 @@ export default function LoginPage() {
             <Input required placeholder="Username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
             <Input required type="password" placeholder="Password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
             {error && <p className="error">{error}</p>}
-            <Button type="submit">Sign In</Button>
+            <Button type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</Button>
           </form>
         </Card>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<main className="page-center"><p>Loading login...</p></main>}>
+      <LoginContent />
+    </Suspense>
   );
 }

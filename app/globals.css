@@ -36,6 +36,12 @@ a { color: inherit; text-decoration: none; }
 .main { padding: 24px; }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
 .profile { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px 12px; }
+.profile { position: relative; }
+.profile-trigger { background: transparent; border: 0; text-align: left; cursor: pointer; color: inherit; }
+.profile-menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 140px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 24px -16px rgba(15, 23, 42, 0.4); padding: 6px; z-index: 5; }
+.menu-item { width: 100%; border: 0; background: transparent; text-align: left; border-radius: 8px; padding: 9px 10px; cursor: pointer; }
+.menu-item:hover { background: #f8fafc; }
+.menu-item.danger { color: #b91c1c; }
 .grid-2 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .table-wrap { border: 1px solid #e2e8f0; border-radius: 14px; overflow: auto; }
 table { width: 100%; border-collapse: collapse; }
@@ -47,6 +53,7 @@ th { background: #f8fafc; font-size: 12px; text-transform: uppercase; color: #64
 .modal-card { width: 100%; max-width: 520px; }
 
 .user-wrap { max-width: 1120px; margin: 0 auto; padding: 24px; }
+.dashboard-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
 .app-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .record { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; margin-top: 10px; }
 .field-row { display: grid; grid-template-columns: 150px 1fr; gap: 10px; margin-bottom: 8px; font-size: 14px; }

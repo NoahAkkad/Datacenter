@@ -627,7 +627,11 @@ app.prepare().then(() => {
   });
 
   server.delete('/api/users/:id', authRequired, requireRole('admin'), requireDeleteConfirmation, (req, res) => {
-    const { id } = req.params;
+    const id = sanitizeText(req.params.id);
+    if (!id) {
+      res.status(400).json({ error: 'User ID is required' });
+      return;
+    }
 
     if (id === req.user.id) {
       res.status(403).json({ error: 'You cannot delete your own active account' });
@@ -643,7 +647,7 @@ app.prepare().then(() => {
 
     writeDb(db);
 
-    res.json({ ok: true, deletedId: id, entity: 'user' });
+    res.status(200).json({ success: true, message: 'User deleted successfully.' });
   });
 
   server.get('/api/browse', authRequired, requireRole('admin'), (req, res) => {

@@ -9,6 +9,28 @@ export default async function handler(req, res) {
 
   const search = String(req.query.search || '').toLowerCase();
   const db = readDb();
-  const applications = db.applications.filter((a) => a.name.toLowerCase().includes(search)).map((a) => ({ id: a.id, name: a.name }));
-  return sendSuccess(res, { applications });
+
+  const applications = db.applications
+    .map((appEntry) => {
+      const company = db.companies.find((companyEntry) => companyEntry.id === appEntry.companyId);
+      const relatedFields = db.fields.filter((field) => field.applicationId === appEntry.id);
+      return {
+        id: appEntry.id,
+        name: appEntry.name,
+        companyId: appEntry.companyId,
+        companyName: company?.name || '-',
+        fieldCount: relatedFields.length,
+        fields: relatedFields
+      };
+    })
+    .filter((entry) => entry.name.toLowerCase().includes(search) || entry.companyName.toLowerCase().includes(search));
+
+  if (auth.user.role === 'admin') return sendSuccess(res, applications);
+
+  return sendSuccess(
+    res,
+    {
+      applications: applications.map((entry) => ({ id: entry.id, name: entry.name }))
+    }
+  );
 }

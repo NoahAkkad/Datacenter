@@ -8,19 +8,12 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Modal } from '../../components/ui/modal';
 import { DataTable } from '../../components/ui/table';
-
-const navItems = [
-  { key: 'companies', label: '🏢 Companies' },
-  { key: 'applications', label: '🧩 Applications' },
-  { key: 'fields', label: '🏷️ Dynamic Fields' },
-  { key: 'users', label: '👥 Users' },
-  { key: 'upload', label: '📁 File Upload' }
-];
+import { AdminSidebar } from '../../components/AdminSidebar';
 
 export default function AdminPage() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const [active, setActive] = useState('companies');
+  const [active, setActive] = useState('home');
   const [data, setData] = useState([]);
   const [search, setSearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('');
@@ -77,6 +70,12 @@ export default function AdminPage() {
     () => applications.find((entry) => entry.id === selectedApp),
     [applications, selectedApp]
   );
+
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    const allowedTabs = ['home', 'companies', 'applications', 'fields', 'users', 'upload'];
+    setActive(allowedTabs.includes(tab) ? tab : 'home');
+  }, []);
 
   const refresh = async () => {
     const response = await fetch('/api/companies');
@@ -206,6 +205,18 @@ export default function AdminPage() {
 
   const filteredCompanies = data.filter((company) => company.name.toLowerCase().includes(search.toLowerCase()));
 
+  const onSidebarNavigate = (tab) => {
+    setActive(tab);
+    if (tab === 'home') {
+      setSearch('');
+      setSelectedCompany('');
+      setSelectedApp('');
+      setRecordTextValues({});
+      setRecordFiles({});
+      setStatusMessage('');
+    }
+  };
+
   if (checkingSession) {
     return (
       <main className="page-center">
@@ -216,16 +227,12 @@ export default function AdminPage() {
 
   return (
     <main className="admin-shell">
-      <aside className={`sidebar ${collapsed ? 'compact' : ''}`}>
-        <Button variant="secondary" onClick={() => setCollapsed((value) => !value)}>{collapsed ? '➡️' : '⬅️'}</Button>
-        <div className="stack sidebar-nav">
-          {navItems.map((item) => (
-            <button key={item.key} onClick={() => setActive(item.key)} className={`nav-btn ${active === item.key ? 'active' : ''}`}>
-              {collapsed ? item.label.split(' ')[0] : item.label}
-            </button>
-          ))}
-        </div>
-      </aside>
+      <AdminSidebar
+        collapsed={collapsed}
+        onToggle={() => setCollapsed((value) => !value)}
+        activeTab={active}
+        onNavigate={onSidebarNavigate}
+      />
 
       <section className="main">
         <header className="topbar">
@@ -258,6 +265,7 @@ export default function AdminPage() {
           </div>
         </Card>
 
+        {active === 'home' || active === 'companies' ? (
         <div className="grid-2 section-gap">
           <Card className="stack">
             <h2>Companies Management</h2>
@@ -270,6 +278,7 @@ export default function AdminPage() {
               data={filteredCompanies}
             />
           </Card>
+          {active === 'home' ? (
           <Card className="stack">
             <h2>Applications per Company</h2>
             <DataTable
@@ -282,9 +291,13 @@ export default function AdminPage() {
               data={applications}
             />
           </Card>
+          ) : null}
         </div>
+        ) : null}
 
+        {active === 'home' || active === 'applications' || active === 'fields' ? (
         <div className="grid-2 section-gap">
+          {active === 'home' || active === 'fields' ? (
           <Card className="stack">
             <h2>Dynamic Fields Management</h2>
             {fields.map((field) => (
@@ -294,6 +307,8 @@ export default function AdminPage() {
               </div>
             ))}
           </Card>
+          ) : null}
+          {active === 'home' || active === 'applications' ? (
           <Card className="stack">
             <h2>Data Listing</h2>
             <DataTable
@@ -309,8 +324,11 @@ export default function AdminPage() {
               data={records}
             />
           </Card>
+          ) : null}
         </div>
+        ) : null}
 
+        {active === 'home' || active === 'upload' ? (
         <div className="grid-2 section-gap">
           <Card className="stack">
             <h2>File Upload (PDF & Images)</h2>
@@ -327,6 +345,17 @@ export default function AdminPage() {
             <Button onClick={createRecord} disabled={!selectedApp}>Upload Record</Button>
           </Card>
         </div>
+        ) : null}
+
+        {active === 'users' ? (
+        <div className="grid-2 section-gap">
+          <Card className="stack">
+            <h2>User Management</h2>
+            <p className="subtitle">Create and manage normal users.</p>
+            <Button onClick={() => setUserModal(true)}>New User</Button>
+          </Card>
+        </div>
+        ) : null}
       </section>
 
       <Modal open={companyModal} onClose={() => setCompanyModal(false)} title="Create Company">

@@ -22,6 +22,8 @@ export default function AdminPage() {
   const [selectedFieldApp, setSelectedFieldApp] = useState('');
   const [recordTextValues, setRecordTextValues] = useState({});
   const [recordFiles, setRecordFiles] = useState({});
+  const [companyFieldPayload, setCompanyFieldPayload] = useState(null);
+  const [isFetchingCompanyFields, setIsFetchingCompanyFields] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
 
   const [companyModal, setCompanyModal] = useState(false);
@@ -89,6 +91,11 @@ export default function AdminPage() {
   const selectedApplication = useMemo(
     () => applications.find((entry) => entry.id === selectedApp),
     [applications, selectedApp]
+  );
+
+  const selectedCompanyInfo = useMemo(
+    () => data.find((company) => company.id === selectedCompany),
+    [data, selectedCompany]
   );
 
   const existingFieldNamesByApplication = useMemo(
@@ -199,25 +206,98 @@ export default function AdminPage() {
     refresh();
   };
 
-  const createRecord = async () => {
-    const formData = new FormData();
-    formData.append('values', JSON.stringify(recordTextValues));
-    Object.entries(recordFiles).forEach(([fieldId, file]) => {
-      if (file) formData.append(fieldId, file);
-    });
-
-    setStatusMessage('');
-    const response = await fetch(`/api/applications/${selectedApp}/records`, { method: 'POST', body: formData });
-    const responsePayload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      setStatusMessage(responsePayload.error || 'Record save failed.');
+  const fetchCompanyFields = async (companyId) => {
+    if (!companyId) {
+      setCompanyFieldPayload(null);
+      setRecordTextValues({});
+      setRecordFiles({});
       return;
     }
 
-    setRecordTextValues({});
-    setRecordFiles({});
-    setStatusMessage('Record saved successfully.');
-    refresh();
+    setIsFetchingCompanyFields(true);
+    setStatusMessage('');
+    try {
+      const response = await fetch(`/api/company/${companyId}/fields`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setCompanyFieldPayload(null);
+        setRecordTextValues({});
+        setRecordFiles({});
+        setStatusMessage(payload.error || 'Unable to load company information.');
+        return;
+      }
+
+      const initialValues = {};
+      (payload.applications || []).forEach((application) => {
+        (application.fields || []).forEach((field) => {
+          if (field.type === 'text') {
+            initialValues[field.id] = application.values?.[field.id] || '';
+          }
+        });
+      });
+
+      setCompanyFieldPayload(payload);
+      setRecordTextValues(initialValues);
+      setRecordFiles({});
+      if (!payload.hasData) {
+        setStatusMessage('No company information found yet. Add details and click Update Information.');
+      }
+    } catch {
+      setCompanyFieldPayload(null);
+      setRecordTextValues({});
+      setRecordFiles({});
+      setStatusMessage('Unable to load company information. Please retry.');
+    } finally {
+      setIsFetchingCompanyFields(false);
+    }
+  };
+
+  const updateCompanyInformation = async () => {
+    if (!selectedCompany || !companyFieldPayload?.applications?.length) {
+      setStatusMessage('Please choose a company with at least one application.');
+      return;
+    }
+
+    setStatusMessage('');
+
+    try {
+      const updates = companyFieldPayload.applications.map(async (application) => {
+        const formData = new FormData();
+        const textValues = (application.fields || []).reduce((accumulator, field) => {
+          if (field.type === 'text') {
+            accumulator[field.id] = recordTextValues[field.id] || '';
+          }
+          return accumulator;
+        }, {});
+
+        formData.append('values', JSON.stringify(textValues));
+        (application.fields || [])
+          .filter((field) => field.type !== 'text')
+          .forEach((field) => {
+            const file = recordFiles[field.id];
+            if (file) {
+              formData.append(field.id, file);
+            }
+          });
+
+        const response = await fetch(`/api/applications/${application.applicationId}/records`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || `Failed to update ${application.applicationName}`);
+        }
+      });
+
+      await Promise.all(updates);
+      setStatusMessage('Company information updated successfully.');
+      await fetchCompanyFields(selectedCompany);
+      await refresh();
+    } catch (error) {
+      setStatusMessage(error?.message || 'Company information update failed.');
+    }
   };
 
   const openDelete = (type, id, label) => setConfirmModal({ open: true, type, id, label });
@@ -429,6 +509,7 @@ export default function AdminPage() {
       setSelectedApp('');
       setRecordTextValues({});
       setRecordFiles({});
+      setCompanyFieldPayload(null);
       setStatusMessage('');
     }
   };
@@ -559,20 +640,47 @@ export default function AdminPage() {
         </div> : null}
 
         {active === 'home' || active === 'upload' ? <div className="grid-2 section-gap"><Card className="stack">
-          <h2>File Upload (PDF & Images)</h2>
-          <select className="select" value={selectedApp} onChange={(event) => setSelectedApp(event.target.value)}>
-            <option value="">Select application</option>
-            {applications.map((app) => <option key={app.id} value={app.id}>{app.name} · {app.companyName}</option>)}
+          <h2>Company Information</h2>
+          <select className="select" value={selectedCompany} onChange={(event) => {
+            const companyId = event.target.value;
+            setSelectedCompany(companyId);
+            fetchCompanyFields(companyId);
+          }}>
+            <option value="">Select company</option>
+            {data.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
           </select>
-          {selectedApplication?.fields?.map((field) => (
-            <div key={field.id}>
-              <strong>{field.name}</strong>
-              {field.type === 'text'
-                ? <Input onChange={(event) => setRecordTextValues({ ...recordTextValues, [field.id]: event.target.value })} />
-                : <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles({ ...recordFiles, [field.id]: event.target.files?.[0] })} />}
+
+          {isFetchingCompanyFields ? <p className="subtitle">Loading company information...</p> : null}
+          {selectedCompany && !isFetchingCompanyFields && !companyFieldPayload?.applications?.length ? <p className="subtitle">No applications found for this company.</p> : null}
+          {selectedCompanyInfo && !isFetchingCompanyFields && companyFieldPayload && !companyFieldPayload.hasData ? <p className="subtitle">No saved information exists for {selectedCompanyInfo.name} yet.</p> : null}
+
+          {companyFieldPayload?.applications?.map((application) => (
+            <div key={application.applicationId} className="stack">
+              <Badge>{application.applicationName}</Badge>
+              {(application.fields || []).map((field) => {
+                const existingValue = application.values?.[field.id];
+                if (field.type === 'text') {
+                  return (
+                    <div key={field.id}>
+                      <strong>{field.name}</strong>
+                      <Input value={recordTextValues[field.id] || ''} onChange={(event) => setRecordTextValues((current) => ({ ...current, [field.id]: event.target.value }))} />
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={field.id} className="stack">
+                    <strong>{field.name}</strong>
+                    {field.type === 'image' && existingValue?.url ? <img src={existingValue.url} alt={existingValue.originalname || field.name} style={{ maxWidth: '220px', borderRadius: '8px' }} /> : null}
+                    {existingValue?.url ? <a href={existingValue.url} target="_blank" rel="noreferrer">Current file: {existingValue.originalname || existingValue.filename || 'Open file'}</a> : <p className="subtitle">No file uploaded yet.</p>}
+                    <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles((current) => ({ ...current, [field.id]: event.target.files?.[0] }))} />
+                  </div>
+                );
+              })}
             </div>
           ))}
-          <Button onClick={createRecord} disabled={!selectedApp}>Upload Record</Button>
+
+          <Button onClick={updateCompanyInformation} disabled={!selectedCompany || isFetchingCompanyFields}>Update Information</Button>
         </Card></div> : null}
 
         {active === 'users' ? <div className="grid-2 section-gap">

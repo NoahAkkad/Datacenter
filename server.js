@@ -462,6 +462,41 @@ app.prepare().then(() => {
     res.status(200).json(upsertedRecord);
   });
 
+  server.get('/api/company/:id/fields', authRequired, requireRole('admin'), (req, res) => {
+    const { id } = req.params;
+    const db = readDb();
+    const company = db.companies.find((entry) => entry.id === id);
+
+    if (!company) {
+      res.status(404).json({ error: 'Company not found' });
+      return;
+    }
+
+    const companyApplications = db.applications.filter((application) => application.companyId === id);
+    const applicationsPayload = companyApplications.map((application) => {
+      const applicationFields = db.fields.filter((field) => field.applicationId === application.id);
+      const latestRecord = db.records
+        .filter((record) => record.applicationId === application.id)
+        .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0))[0];
+
+      return {
+        applicationId: application.id,
+        applicationName: application.name,
+        fields: applicationFields,
+        values: latestRecord?.values || {},
+        recordId: latestRecord?.id || null
+      };
+    });
+
+    const hasData = applicationsPayload.some((application) => Object.keys(application.values || {}).length > 0);
+    res.json({
+      companyId: company.id,
+      companyName: company.name,
+      applications: applicationsPayload,
+      hasData
+    });
+  });
+
   server.post('/api/users', authRequired, requireRole('admin'), (req, res) => {
     const { username, password, role = 'user' } = req.body;
     if (!username || !password) {

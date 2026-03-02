@@ -1,29 +1,47 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/button';
+import { Badge } from '../../components/ui/badge';
+import { Modal } from '../../components/ui/modal';
+import { DataTable } from '../../components/ui/table';
+
+const navItems = [
+  { key: 'companies', label: '🏢 Companies' },
+  { key: 'applications', label: '🧩 Applications' },
+  { key: 'fields', label: '🏷️ Dynamic Fields' },
+  { key: 'users', label: '👥 Users' },
+  { key: 'upload', label: '📁 File Upload' }
+];
 
 export default function AdminPage() {
+  const [collapsed, setCollapsed] = useState(false);
+  const [active, setActive] = useState('companies');
   const [data, setData] = useState([]);
+  const [search, setSearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedApp, setSelectedApp] = useState('');
+  const [recordTextValues, setRecordTextValues] = useState({});
+  const [recordFiles, setRecordFiles] = useState({});
+
+  const [companyModal, setCompanyModal] = useState(false);
+  const [appModal, setAppModal] = useState(false);
+  const [fieldModal, setFieldModal] = useState(false);
+  const [userModal, setUserModal] = useState(false);
+
   const [companyName, setCompanyName] = useState('');
   const [appName, setAppName] = useState('');
   const [fieldForm, setFieldForm] = useState({ name: '', type: 'text' });
   const [userForm, setUserForm] = useState({ username: '', password: '' });
-  const [recordTextValues, setRecordTextValues] = useState({});
-  const [recordFiles, setRecordFiles] = useState({});
 
-  const selectedApplication = useMemo(
-    () => data.flatMap((c) => c.applications).find((a) => a.id === selectedApp),
-    [data, selectedApp]
-  );
+  const applications = useMemo(() => data.flatMap((company) => company.applications.map((app) => ({ ...app, companyName: company.name }))), [data]);
+  const selectedApplication = useMemo(() => applications.find((entry) => entry.id === selectedApp), [applications, selectedApp]);
 
   const refresh = async () => {
-    const res = await fetch('/api/companies');
-    if (res.ok) {
-      const payload = await res.json();
-      setData(payload);
-    }
+    const response = await fetch('/api/companies');
+    if (response.ok) setData(await response.json());
   };
 
   useEffect(() => {
@@ -31,123 +49,162 @@ export default function AdminPage() {
   }, []);
 
   const createCompany = async () => {
-    await fetch('/api/companies', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: companyName })
-    });
+    await fetch('/api/companies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: companyName }) });
+    setCompanyModal(false);
     setCompanyName('');
     refresh();
   };
 
   const createApp = async () => {
-    await fetch(`/api/companies/${selectedCompany}/applications`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: appName })
-    });
+    await fetch(`/api/companies/${selectedCompany}/applications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: appName }) });
+    setAppModal(false);
     setAppName('');
     refresh();
   };
 
   const createField = async () => {
-    await fetch(`/api/applications/${selectedApp}/fields`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(fieldForm)
-    });
+    await fetch(`/api/applications/${selectedApp}/fields`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fieldForm) });
+    setFieldModal(false);
     setFieldForm({ name: '', type: 'text' });
     refresh();
   };
 
   const createUser = async () => {
-    await fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...userForm, role: 'user' })
-    });
+    await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...userForm, role: 'user' }) });
+    setUserModal(false);
     setUserForm({ username: '', password: '' });
   };
 
   const createRecord = async () => {
-    const form = new FormData();
-    form.append('values', JSON.stringify(recordTextValues));
+    const formData = new FormData();
+    formData.append('values', JSON.stringify(recordTextValues));
     Object.entries(recordFiles).forEach(([fieldId, file]) => {
-      if (file) form.append(fieldId, file);
+      if (file) formData.append(fieldId, file);
     });
-
-    await fetch(`/api/applications/${selectedApp}/records`, {
-      method: 'POST',
-      body: form
-    });
-
+    await fetch(`/api/applications/${selectedApp}/records`, { method: 'POST', body: formData });
     setRecordTextValues({});
     setRecordFiles({});
+    refresh();
   };
 
+  const filteredCompanies = data.filter((company) => company.name.toLowerCase().includes(search.toLowerCase()));
+
   return (
-    <div className="stack">
-      <h1>Admin Dashboard</h1>
-      <section className="card stack">
-        <h2>1) Create Company</h2>
-        <div className="row">
-          <input value={companyName} placeholder="Company name" onChange={(e) => setCompanyName(e.target.value)} />
-          <button className="button" onClick={createCompany}>Add Company</button>
+    <main className="admin-shell">
+      <aside className={`sidebar ${collapsed ? 'compact' : ''}`}>
+        <Button variant="secondary" onClick={() => setCollapsed((value) => !value)}>{collapsed ? '➡️' : '⬅️'}</Button>
+        <div className="stack sidebar-nav">
+          {navItems.map((item) => (
+            <button key={item.key} onClick={() => setActive(item.key)} className={`nav-btn ${active === item.key ? 'active' : ''}`}>
+              {collapsed ? item.label.split(' ')[0] : item.label}
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      <section className="main">
+        <header className="topbar">
+          <div>
+            <h1 className="login-title">Admin Dashboard</h1>
+            <p className="subtitle">Structured management for all data center entities.</p>
+          </div>
+          <div className="profile">
+            <strong>Administrator</strong>
+            <p className="subtitle">admin@datacenter.io</p>
+          </div>
+        </header>
+
+        <Card>
+          <div className="row">
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search companies" />
+            <Button onClick={() => setCompanyModal(true)}>New Company</Button>
+            <Button variant="secondary" onClick={() => setAppModal(true)}>New Application</Button>
+            <Button variant="secondary" onClick={() => setFieldModal(true)}>New Field</Button>
+            <Button variant="secondary" onClick={() => setUserModal(true)}>New User</Button>
+          </div>
+        </Card>
+
+        <div className="grid-2 section-gap">
+          <Card className="stack">
+            <h2>Companies Management</h2>
+            <DataTable
+              columns={[
+                { key: 'name', label: 'Company Name' },
+                { key: 'apps', label: 'Applications', render: (row) => row.applications.length }
+              ]}
+              data={filteredCompanies}
+            />
+          </Card>
+          <Card className="stack">
+            <h2>Applications per Company</h2>
+            <DataTable
+              columns={[
+                { key: 'name', label: 'Application' },
+                { key: 'companyName', label: 'Company' },
+                { key: 'fields', label: 'Fields', render: (row) => row.fields?.length || 0 }
+              ]}
+              data={applications}
+            />
+          </Card>
+        </div>
+
+        <div className="grid-2 section-gap">
+          <Card>
+            <h2>Dynamic Fields Management</h2>
+            <div className="section-mini-gap">
+              {applications.flatMap((app) => app.fields || []).map((field) => <Badge key={field.id}>{field.name} · {field.type}</Badge>)}
+            </div>
+          </Card>
+          <Card className="stack">
+            <h2>File Upload (PDF & Images)</h2>
+            <select className="select" value={selectedApp} onChange={(event) => setSelectedApp(event.target.value)}>
+              <option value="">Select application</option>
+              {applications.map((app) => <option key={app.id} value={app.id}>{app.name} · {app.companyName}</option>)}
+            </select>
+            {selectedApplication?.fields?.map((field) => (
+              <div key={field.id}>
+                <strong>{field.name}</strong>
+                {field.type === 'text' ? <Input onChange={(event) => setRecordTextValues({ ...recordTextValues, [field.id]: event.target.value })} /> : <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles({ ...recordFiles, [field.id]: event.target.files?.[0] })} />}
+              </div>
+            ))}
+            <Button onClick={createRecord} disabled={!selectedApp}>Upload Record</Button>
+          </Card>
         </div>
       </section>
 
-      <section className="card stack">
-        <h2>2) Create Application</h2>
-        <select value={selectedCompany} onChange={(e) => setSelectedCompany(e.target.value)}>
-          <option value="">Select Company</option>
+      <Modal open={companyModal} onClose={() => setCompanyModal(false)} title="Create Company">
+        <Input placeholder="Company name" value={companyName} onChange={(event) => setCompanyName(event.target.value)} />
+        <Button onClick={createCompany} disabled={!companyName.trim()}>Create</Button>
+      </Modal>
+
+      <Modal open={appModal} onClose={() => setAppModal(false)} title="Create Application">
+        <select className="select" value={selectedCompany} onChange={(event) => setSelectedCompany(event.target.value)}>
+          <option value="">Select company</option>
           {data.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
         </select>
-        <div className="row">
-          <input value={appName} placeholder="Application name" onChange={(e) => setAppName(e.target.value)} />
-          <button className="button" onClick={createApp} disabled={!selectedCompany}>Add Application</button>
-        </div>
-      </section>
+        <Input placeholder="Application name" value={appName} onChange={(event) => setAppName(event.target.value)} />
+        <Button onClick={createApp} disabled={!selectedCompany || !appName.trim()}>Create</Button>
+      </Modal>
 
-      <section className="card stack">
-        <h2>3) Define Dynamic Fields</h2>
-        <select value={selectedApp} onChange={(e) => setSelectedApp(e.target.value)}>
-          <option value="">Select Application</option>
-          {data.flatMap((c) => c.applications).map((application) => <option key={application.id} value={application.id}>{application.name}</option>)}
+      <Modal open={fieldModal} onClose={() => setFieldModal(false)} title="Create Dynamic Field">
+        <select className="select" value={selectedApp} onChange={(event) => setSelectedApp(event.target.value)}>
+          <option value="">Select application</option>
+          {applications.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}
         </select>
-        <div className="row">
-          <input placeholder="Field name" value={fieldForm.name} onChange={(e) => setFieldForm({ ...fieldForm, name: e.target.value })} />
-          <select value={fieldForm.type} onChange={(e) => setFieldForm({ ...fieldForm, type: e.target.value })}>
-            <option value="text">Text</option>
-            <option value="pdf">PDF</option>
-            <option value="image">Image</option>
-          </select>
-          <button className="button" onClick={createField} disabled={!selectedApp}>Add Field</button>
-        </div>
-      </section>
+        <Input placeholder="Field name" value={fieldForm.name} onChange={(event) => setFieldForm({ ...fieldForm, name: event.target.value })} />
+        <select className="select" value={fieldForm.type} onChange={(event) => setFieldForm({ ...fieldForm, type: event.target.value })}>
+          <option value="text">Text</option>
+          <option value="pdf">PDF</option>
+          <option value="image">Image</option>
+        </select>
+        <Button onClick={createField} disabled={!selectedApp || !fieldForm.name.trim()}>Create</Button>
+      </Modal>
 
-      {selectedApplication && (
-        <section className="card stack">
-          <h2>4) Insert Data</h2>
-          {selectedApplication.fields?.map((field) => (
-            <div key={field.id} className="stack">
-              <label>{field.name} ({field.type})</label>
-              {field.type === 'text' ? (
-                <input onChange={(e) => setRecordTextValues({ ...recordTextValues, [field.id]: e.target.value })} />
-              ) : (
-                <input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(e) => setRecordFiles({ ...recordFiles, [field.id]: e.target.files?.[0] })} />
-              )}
-            </div>
-          ))}
-          <button className="button" onClick={createRecord}>Save Record</button>
-        </section>
-      )}
-
-      <section className="card stack">
-        <h2>5) Create Read-only User</h2>
-        <input placeholder="Username" value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} />
-        <input type="password" placeholder="Password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
-        <button className="button" onClick={createUser}>Create User</button>
-      </section>
-    </div>
+      <Modal open={userModal} onClose={() => setUserModal(false)} title="Create Read-only User">
+        <Input placeholder="Username" value={userForm.username} onChange={(event) => setUserForm({ ...userForm, username: event.target.value })} />
+        <Input type="password" placeholder="Password" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} />
+        <Button onClick={createUser} disabled={!userForm.username || !userForm.password}>Create User</Button>
+      </Modal>
+    </main>
   );
 }

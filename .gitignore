@@ -1,0 +1,6 @@
+node_modules
+.next
+data/db.json
+public/uploads/*
+!public/uploads/.gitkeep
+npm-debug.log*

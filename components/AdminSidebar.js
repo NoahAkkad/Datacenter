@@ -10,7 +10,7 @@ const adminMenu = [
   { key: 'applications', label: '🧩 Applications', href: '/admin?tab=applications' },
   { key: 'fields', label: '🏷️ Dynamic Fields', href: '/admin?tab=fields' },
   { key: 'users', label: '👥 Users', href: '/admin?tab=users' },
-  { key: 'upload', label: '📁 File Upload', href: '/admin?tab=upload' }
+  { key: 'upload', label: '📁 Company Information', href: '/admin?tab=upload' }
 ];
 
 export function AdminSidebar({ collapsed, onToggle, activeTab, onNavigate, applications = [], selectedApplicationId = '' }) {

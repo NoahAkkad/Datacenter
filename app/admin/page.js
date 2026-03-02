@@ -203,18 +203,74 @@ export default function AdminPage() {
     if (type === 'user') setEditing({ open: true, type, id: row.id, payload: { username: row.username, password: '' }, title: 'Edit User' });
   };
 
+  const applyOptimisticEdit = (type, id, updatedEntity) => {
+    if (type === 'company') {
+      setData((current) => current.map((company) => (company.id === id ? { ...company, ...updatedEntity } : company)));
+      return;
+    }
+
+    if (type === 'application') {
+      setData((current) => current.map((company) => ({
+        ...company,
+        applications: company.applications.map((application) => (application.id === id ? { ...application, ...updatedEntity } : application))
+      })));
+      return;
+    }
+
+    if (type === 'field') {
+      setData((current) => current.map((company) => ({
+        ...company,
+        applications: company.applications.map((application) => ({
+          ...application,
+          fields: (application.fields || []).map((field) => (field.id === id ? { ...field, ...updatedEntity } : field))
+        }))
+      })));
+      return;
+    }
+
+    if (type === 'data') {
+      setData((current) => current.map((company) => ({
+        ...company,
+        applications: company.applications.map((application) => ({
+          ...application,
+          records: (application.records || []).map((record) => (record.id === id ? { ...record, ...updatedEntity } : record))
+        }))
+      })));
+      return;
+    }
+
+    if (type === 'user') {
+      setUsers((current) => current.map((user) => (user.id === id ? { ...user, ...updatedEntity } : user)));
+    }
+  };
+
   const executeEdit = async () => {
     const endpointMap = {
-      company: `/api/company/${editing.id}`,
-      application: `/api/application/${editing.id}`,
-      field: `/api/field/${editing.id}`,
-      data: `/api/data/${editing.id}`,
-      user: `/api/user/${editing.id}`
+      company: `/api/companies/${editing.id}`,
+      application: `/api/applications/${editing.id}`,
+      field: `/api/fields/${editing.id}`,
+      data: `/api/records/${editing.id}`,
+      user: `/api/users/${editing.id}`
     };
+
+    if (!endpointMap[editing.type] || !editing.id) {
+      setStatusMessage('Unable to submit edit: missing entity type or ID.');
+      return;
+    }
 
     const payload = { ...editing.payload };
     if (editing.type === 'user' && !payload.password) delete payload.password;
     if (editing.type === 'field' && payload.order === '') delete payload.order;
+
+    if ((editing.type === 'company' || editing.type === 'application') && !String(payload.name || '').trim()) {
+      setStatusMessage('Name is required.');
+      return;
+    }
+
+    if (editing.type === 'user' && !String(payload.username || '').trim()) {
+      setStatusMessage('Username is required.');
+      return;
+    }
 
     setSavingEdit(true);
     setStatusMessage('');
@@ -243,9 +299,10 @@ export default function AdminPage() {
         return;
       }
 
+      applyOptimisticEdit(editing.type, editing.id, payload.data || {});
       setEditing({ open: false, type: '', id: '', payload: {}, title: '' });
       setStatusMessage(payload.message || 'Update completed successfully.');
-      refresh();
+      await refresh();
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('[admin:update] request failed', {

@@ -7,7 +7,7 @@ import { Card } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
 import { Modal } from '../../../../components/ui/modal';
 
-function formatTimestamp(value) {
+function formatDate(value) {
   if (!value) return '—';
 
   const parsed = new Date(value);
@@ -16,10 +16,7 @@ function formatTimestamp(value) {
   const year = parsed.getFullYear();
   const month = String(parsed.getMonth() + 1).padStart(2, '0');
   const day = String(parsed.getDate()).padStart(2, '0');
-  const hour = String(parsed.getHours()).padStart(2, '0');
-  const minute = String(parsed.getMinutes()).padStart(2, '0');
-  const second = String(parsed.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+  return `${year}-${month}-${day}`;
 }
 
 export default function ApplicationDetailsPage() {
@@ -81,8 +78,8 @@ export default function ApplicationDetailsPage() {
         <div>
           <h1 className="title">{application?.name || 'Application Details'}</h1>
           <p className="subtitle">{application?.companyName ? `Company: ${application.companyName}` : 'Read-only application data.'}</p>
-          <p className="subtitle">Created: {formatTimestamp(application?.createdAt)}</p>
-          <p className="subtitle">Last modified: {formatTimestamp(application?.updatedAt)}</p>
+          <p className="subtitle">Created: {formatDate(application?.createdAt)}</p>
+          <p className="subtitle">Last modified: {formatDate(application?.updatedAt)}</p>
         </div>
         <Link href="/dashboard"><Button variant="secondary">Back to Applications</Button></Link>
       </div>
@@ -96,10 +93,6 @@ export default function ApplicationDetailsPage() {
       ) : (
         <Card>
           <div className="stack section-mini-gap">
-            <div className="stack" style={{ gap: '0.25rem' }}>
-              <p className="subtitle">Record created: {formatTimestamp(application.records[0].createdAt)}</p>
-              <p className="subtitle">Record last modified: {formatTimestamp(application.records[0].updatedAt)}</p>
-            </div>
             {application.records[0].fields.map((field) => (
               <div key={`${field.label}-${field.type}`} className="field-row">
                 <strong>{field.label}</strong>

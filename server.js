@@ -72,6 +72,26 @@ function requireRole(role) {
   };
 }
 
+
+function normalizeRecordFields(fields, recordValues = {}) {
+  return fields
+    .map((field) => {
+      const rawValue = recordValues[field.id];
+      if (!rawValue) return null;
+
+      if (field.type === 'text') {
+        return { label: field.name, type: 'text', value: String(rawValue) };
+      }
+
+      return {
+        label: field.name,
+        type: field.type,
+        fileUrl: rawValue.url
+      };
+    })
+    .filter(Boolean);
+}
+
 function requireDeleteConfirmation(req, res, nextFn) {
   if (req.body?.confirm !== true) {
     res.status(400).json({ error: 'Deletion requires explicit confirmation' });
@@ -148,7 +168,7 @@ app.prepare().then(() => {
     res.json(req.user);
   });
 
-  server.get('/api/companies', authRequired, (req, res) => {
+  server.get('/api/companies', authRequired, requireRole('admin'), (req, res) => {
     const db = readDb();
     const companies = db.companies.map((company) => ({
       ...company,
@@ -161,6 +181,45 @@ app.prepare().then(() => {
         }))
     }));
     res.json(companies);
+  });
+
+  server.get('/api/applications', authRequired, requireRole('user'), (req, res) => {
+    const search = String(req.query.search || '').toLowerCase();
+    const db = readDb();
+
+    const applications = db.applications
+      .filter((appEntry) => appEntry.name.toLowerCase().includes(search))
+      .map((appEntry) => ({
+        id: appEntry.id,
+        name: appEntry.name
+      }));
+
+    res.json({ applications });
+  });
+
+  server.get('/api/applications/:id', authRequired, requireRole('user'), (req, res) => {
+    const { id } = req.params;
+    const db = readDb();
+    const application = db.applications.find((entry) => entry.id === id);
+
+    if (!application) {
+      res.status(404).json({ error: 'Application not found' });
+      return;
+    }
+
+    const fields = db.fields.filter((field) => field.applicationId === application.id);
+    const records = db.records
+      .filter((record) => record.applicationId === application.id)
+      .map((record) => ({
+        createdAt: record.createdAt,
+        fields: normalizeRecordFields(fields, record.values)
+      }));
+
+    res.json({
+      id: application.id,
+      name: application.name,
+      records
+    });
   });
 
   server.post('/api/companies', authRequired, requireRole('admin'), (req, res) => {
@@ -380,7 +439,7 @@ app.prepare().then(() => {
     res.json({ ok: true, deletedId: id, entity: 'user' });
   });
 
-  server.get('/api/browse', authRequired, (req, res) => {
+  server.get('/api/browse', authRequired, requireRole('admin'), (req, res) => {
     const { company = '', application = '' } = req.query;
     const db = readDb();
 

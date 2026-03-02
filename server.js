@@ -4,7 +4,7 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const next = require('next');
-const { readDb, withDb, nextId } = require('./lib/db');
+const { readDb, writeDb, withDb, nextId } = require('./lib/db');
 const { hashPassword, verifyPassword, signToken, verifyToken } = require('./lib/auth');
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -32,6 +32,14 @@ const upload = multer({
     cb(new Error('Only image and PDF files are allowed'));
   }
 });
+
+const {
+  deleteRecordById,
+  deleteFieldById,
+  deleteApplicationById,
+  deleteCompanyById,
+  deleteUserById
+} = require('./lib/deletionService');
 
 const authCookieOptions = {
   httpOnly: true,
@@ -62,6 +70,14 @@ function requireRole(role) {
     }
     nextFn();
   };
+}
+
+function requireDeleteConfirmation(req, res, nextFn) {
+  if (req.body?.confirm !== true) {
+    res.status(400).json({ error: 'Deletion requires explicit confirmation' });
+    return;
+  }
+  nextFn();
 }
 
 app.prepare().then(() => {
@@ -286,6 +302,82 @@ app.prepare().then(() => {
     });
 
     res.status(201).json({ id: user.id, username: user.username, role: user.role });
+  });
+
+  server.delete('/api/company/:id', authRequired, requireRole('admin'), requireDeleteConfirmation, (req, res) => {
+    const { id } = req.params;
+    const db = readDb();
+    const deletion = deleteCompanyById(db, id, req.user);
+    if (deletion.error) {
+      res.status(deletion.status).json({ error: deletion.error });
+      return;
+    }
+
+    writeDb(db);
+
+    res.json({ ok: true, deletedId: id, entity: 'company' });
+  });
+
+  server.delete('/api/application/:id', authRequired, requireRole('admin'), requireDeleteConfirmation, (req, res) => {
+    const { id } = req.params;
+    const db = readDb();
+    const deletion = deleteApplicationById(db, id, req.user);
+    if (deletion.error) {
+      res.status(deletion.status).json({ error: deletion.error });
+      return;
+    }
+
+    writeDb(db);
+
+    res.json({ ok: true, deletedId: id, entity: 'application' });
+  });
+
+  server.delete('/api/field/:id', authRequired, requireRole('admin'), requireDeleteConfirmation, (req, res) => {
+    const { id } = req.params;
+    const db = readDb();
+    const deletion = deleteFieldById(db, id, req.user);
+    if (deletion.error) {
+      res.status(deletion.status).json({ error: deletion.error });
+      return;
+    }
+
+    writeDb(db);
+
+    res.json({ ok: true, deletedId: id, entity: 'field' });
+  });
+
+  server.delete('/api/data/:id', authRequired, requireRole('admin'), requireDeleteConfirmation, (req, res) => {
+    const { id } = req.params;
+    const db = readDb();
+    const deletion = deleteRecordById(db, id, req.user);
+    if (deletion.error) {
+      res.status(deletion.status).json({ error: deletion.error });
+      return;
+    }
+
+    writeDb(db);
+
+    res.json({ ok: true, deletedId: id, entity: 'data' });
+  });
+
+  server.delete('/api/users/:id', authRequired, requireRole('admin'), requireDeleteConfirmation, (req, res) => {
+    const { id } = req.params;
+
+    if (id === req.user.id) {
+      res.status(403).json({ error: 'You cannot delete your own active account' });
+      return;
+    }
+
+    const db = readDb();
+    const deletion = deleteUserById(db, id, req.user);
+    if (deletion.error) {
+      res.status(deletion.status).json({ error: deletion.error });
+      return;
+    }
+
+    writeDb(db);
+
+    res.json({ ok: true, deletedId: id, entity: 'user' });
   });
 
   server.get('/api/browse', authRequired, (req, res) => {

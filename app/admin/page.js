@@ -27,11 +27,13 @@ export default function AdminPage() {
   const [selectedApp, setSelectedApp] = useState('');
   const [recordTextValues, setRecordTextValues] = useState({});
   const [recordFiles, setRecordFiles] = useState({});
+  const [statusMessage, setStatusMessage] = useState('');
 
   const [companyModal, setCompanyModal] = useState(false);
   const [appModal, setAppModal] = useState(false);
   const [fieldModal, setFieldModal] = useState(false);
   const [userModal, setUserModal] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ open: false, type: '', id: '', label: '' });
 
   const [companyName, setCompanyName] = useState('');
   const [appName, setAppName] = useState('');
@@ -41,6 +43,7 @@ export default function AdminPage() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const validateSession = async () => {
@@ -61,8 +64,19 @@ export default function AdminPage() {
     validateSession();
   }, [router]);
 
-  const applications = useMemo(() => data.flatMap((company) => company.applications.map((app) => ({ ...app, companyName: company.name }))), [data]);
-  const selectedApplication = useMemo(() => applications.find((entry) => entry.id === selectedApp), [applications, selectedApp]);
+  const applications = useMemo(
+    () => data.flatMap((company) => company.applications.map((app) => ({ ...app, companyName: company.name }))),
+    [data]
+  );
+  const fields = useMemo(() => applications.flatMap((app) => app.fields || []).map((field) => ({ ...field, appName: applications.find((app) => app.id === field.applicationId)?.name || '-' })), [applications]);
+  const records = useMemo(
+    () => applications.flatMap((app) => (app.records || []).map((record) => ({ ...record, appName: app.name }))),
+    [applications]
+  );
+  const selectedApplication = useMemo(
+    () => applications.find((entry) => entry.id === selectedApp),
+    [applications, selectedApp]
+  );
 
   const refresh = async () => {
     const response = await fetch('/api/companies');
@@ -128,6 +142,68 @@ export default function AdminPage() {
     refresh();
   };
 
+  const openDelete = (type, id, label) => setConfirmModal({ open: true, type, id, label });
+
+  const optimisticDelete = (type, id) => {
+    if (type === 'company') {
+      setData((current) => current.filter((entry) => entry.id !== id));
+      return;
+    }
+
+    if (type === 'application') {
+      setData((current) => current.map((company) => ({ ...company, applications: company.applications.filter((app) => app.id !== id) })));
+      return;
+    }
+
+    if (type === 'field') {
+      setData((current) => current.map((company) => ({
+        ...company,
+        applications: company.applications.map((app) => ({ ...app, fields: (app.fields || []).filter((field) => field.id !== id) }))
+      })));
+      return;
+    }
+
+    if (type === 'data') {
+      setData((current) => current.map((company) => ({
+        ...company,
+        applications: company.applications.map((app) => ({ ...app, records: (app.records || []).filter((record) => record.id !== id) }))
+      })));
+    }
+  };
+
+  const executeDelete = async () => {
+    const { type, id } = confirmModal;
+    const endpointMap = {
+      company: `/api/company/${id}`,
+      application: `/api/application/${id}`,
+      field: `/api/field/${id}`,
+      data: `/api/data/${id}`
+    };
+
+    setDeleting(true);
+    setStatusMessage('');
+    try {
+      const response = await fetch(endpointMap[type], {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setStatusMessage(payload.error || 'Delete failed.');
+        return;
+      }
+      optimisticDelete(type, id);
+      setConfirmModal({ open: false, type: '', id: '', label: '' });
+      setStatusMessage('Deletion completed successfully.');
+      refresh();
+    } catch {
+      setStatusMessage('Delete request failed. Please retry.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const filteredCompanies = data.filter((company) => company.name.toLowerCase().includes(search.toLowerCase()));
 
   if (checkingSession) {
@@ -170,6 +246,8 @@ export default function AdminPage() {
           </div>
         </header>
 
+        {statusMessage ? <p className="error">{statusMessage}</p> : null}
+
         <Card>
           <div className="row">
             <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search companies" />
@@ -186,7 +264,8 @@ export default function AdminPage() {
             <DataTable
               columns={[
                 { key: 'name', label: 'Company Name' },
-                { key: 'apps', label: 'Applications', render: (row) => row.applications.length }
+                { key: 'apps', label: 'Applications', render: (row) => row.applications.length },
+                { key: 'actions', label: 'Actions', render: (row) => <Button onClick={() => openDelete('company', row.id, row.name)}>Delete</Button> }
               ]}
               data={filteredCompanies}
             />
@@ -197,7 +276,8 @@ export default function AdminPage() {
               columns={[
                 { key: 'name', label: 'Application' },
                 { key: 'companyName', label: 'Company' },
-                { key: 'fields', label: 'Fields', render: (row) => row.fields?.length || 0 }
+                { key: 'fields', label: 'Fields', render: (row) => row.fields?.length || 0 },
+                { key: 'actions', label: 'Actions', render: (row) => <Button onClick={() => openDelete('application', row.id, row.name)}>Delete</Button> }
               ]}
               data={applications}
             />
@@ -205,12 +285,33 @@ export default function AdminPage() {
         </div>
 
         <div className="grid-2 section-gap">
-          <Card>
+          <Card className="stack">
             <h2>Dynamic Fields Management</h2>
-            <div className="section-mini-gap">
-              {applications.flatMap((app) => app.fields || []).map((field) => <Badge key={field.id}>{field.name} · {field.type}</Badge>)}
-            </div>
+            {fields.map((field) => (
+              <div className="row" key={field.id}>
+                <Badge>{field.name} · {field.type} · {field.appName}</Badge>
+                <Button variant="secondary" onClick={() => openDelete('field', field.id, field.name)}>Delete</Button>
+              </div>
+            ))}
           </Card>
+          <Card className="stack">
+            <h2>Data Listing</h2>
+            <DataTable
+              columns={[
+                { key: 'appName', label: 'Application' },
+                { key: 'id', label: 'Record ID' },
+                {
+                  key: 'actions',
+                  label: 'Actions',
+                  render: (row) => <Button variant="secondary" onClick={() => openDelete('data', row.id, `${row.appName} / ${row.id}`)}>Delete</Button>
+                }
+              ]}
+              data={records}
+            />
+          </Card>
+        </div>
+
+        <div className="grid-2 section-gap">
           <Card className="stack">
             <h2>File Upload (PDF & Images)</h2>
             <select className="select" value={selectedApp} onChange={(event) => setSelectedApp(event.target.value)}>
@@ -260,6 +361,15 @@ export default function AdminPage() {
         <Input placeholder="Username" value={userForm.username} onChange={(event) => setUserForm({ ...userForm, username: event.target.value })} />
         <Input type="password" placeholder="Password" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} />
         <Button onClick={createUser} disabled={!userForm.username || !userForm.password}>Create User</Button>
+      </Modal>
+
+      <Modal open={confirmModal.open} onClose={() => !deleting && setConfirmModal({ open: false, type: '', id: '', label: '' })} title="Confirm Deletion">
+        <p className="subtitle">This action is destructive and cannot be undone.</p>
+        <p><strong>Target:</strong> {confirmModal.label}</p>
+        <div className="row">
+          <Button variant="secondary" onClick={() => setConfirmModal({ open: false, type: '', id: '', label: '' })} disabled={deleting}>Cancel</Button>
+          <Button onClick={executeDelete} disabled={deleting}>{deleting ? 'Deleting...' : 'Delete now'}</Button>
+        </div>
       </Modal>
 
       <Modal open={logoutConfirmOpen} onClose={() => !isLoggingOut && setLogoutConfirmOpen(false)} title="Confirm Logout">

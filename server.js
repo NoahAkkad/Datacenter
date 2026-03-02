@@ -76,6 +76,10 @@ function sanitizeText(value) {
   return String(value || '').trim();
 }
 
+function normalizeFieldName(value) {
+  return sanitizeText(value).toLowerCase();
+}
+
 function isNonEmptyId(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -127,6 +131,24 @@ function normalizeRecordFields(fields, recordValues = {}) {
       };
     })
     .filter(Boolean);
+}
+
+function getConsolidatedRecord(records = []) {
+  if (!records.length) return null;
+
+  const sortedRecords = [...records].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const mergedValues = sortedRecords.reduce((accumulator, record) => ({
+    ...accumulator,
+    ...(record.values || {})
+  }), {});
+
+  return {
+    id: sortedRecords[0].id,
+    applicationId: sortedRecords[0].applicationId,
+    values: mergedValues,
+    createdAt: sortedRecords[0].createdAt,
+    updatedAt: sortedRecords[sortedRecords.length - 1].createdAt
+  };
 }
 
 function requireDeleteConfirmation(req, res, nextFn) {
@@ -214,7 +236,10 @@ app.prepare().then(() => {
         .map((appEntry) => ({
           ...appEntry,
           fields: db.fields.filter((field) => field.applicationId === appEntry.id),
-          records: db.records.filter((record) => record.applicationId === appEntry.id)
+          records: (() => {
+            const mergedRecord = getConsolidatedRecord(db.records.filter((record) => record.applicationId === appEntry.id));
+            return mergedRecord ? [mergedRecord] : [];
+          })()
         }))
     }));
     res.json(companies);
@@ -245,16 +270,20 @@ app.prepare().then(() => {
     }
 
     const fields = db.fields.filter((field) => field.applicationId === application.id);
-    const records = db.records
-      .filter((record) => record.applicationId === application.id)
-      .map((record) => ({
-        createdAt: record.createdAt,
-        fields: normalizeRecordFields(fields, record.values)
-      }));
+    const company = db.companies.find((entry) => entry.id === application.companyId);
+    const mergedRecord = getConsolidatedRecord(db.records.filter((record) => record.applicationId === application.id));
+    const records = mergedRecord
+      ? [{
+        createdAt: mergedRecord.createdAt,
+        updatedAt: mergedRecord.updatedAt,
+        fields: normalizeRecordFields(fields, mergedRecord.values)
+      }]
+      : [];
 
     res.json({
       id: application.id,
       name: application.name,
+      companyName: company?.name || 'Unknown Company',
       records
     });
   });
@@ -326,13 +355,34 @@ app.prepare().then(() => {
     }
 
     const createdAt = new Date().toISOString();
-    const fieldsToCreate = targetApplicationIds.map((targetApplicationId) => ({
-      id: nextId('fld'),
-      applicationId: targetApplicationId,
-      name: nextName,
-      type,
-      createdAt
-    }));
+    const duplicateEntries = [];
+    const fieldsToCreate = targetApplicationIds.map((targetApplicationId) => {
+      const duplicate = db.fields.find((field) => field.applicationId === targetApplicationId && normalizeFieldName(field.name) === normalizeFieldName(nextName));
+      if (duplicate) {
+        duplicateEntries.push({
+          applicationId: targetApplicationId,
+          fieldId: duplicate.id,
+          fieldName: duplicate.name
+        });
+        return null;
+      }
+
+      return {
+        id: nextId('fld'),
+        applicationId: targetApplicationId,
+        name: nextName,
+        type,
+        createdAt
+      };
+    }).filter(Boolean);
+
+    if (duplicateEntries.length > 0) {
+      res.status(409).json({
+        error: 'Field name already exists for one or more applications',
+        duplicates: duplicateEntries
+      });
+      return;
+    }
 
     withDb((current) => {
       current.fields.push(...fieldsToCreate);
@@ -380,19 +430,36 @@ app.prepare().then(() => {
         }
       });
 
-    const record = {
-      id: nextId('rec'),
-      applicationId,
-      values,
-      createdAt: new Date().toISOString()
-    };
+    const now = new Date().toISOString();
+    let upsertedRecord;
 
     withDb((current) => {
-      current.records.push(record);
+      const applicationRecords = current.records.filter((record) => record.applicationId === applicationId);
+      const existingRecord = applicationRecords[0];
+
+      if (!existingRecord) {
+        upsertedRecord = {
+          id: nextId('rec'),
+          applicationId,
+          values,
+          createdAt: now,
+          updatedAt: now
+        };
+        current.records.push(upsertedRecord);
+        return current;
+      }
+
+      existingRecord.values = {
+        ...(existingRecord.values || {}),
+        ...values
+      };
+      existingRecord.updatedAt = now;
+      upsertedRecord = existingRecord;
+      current.records = current.records.filter((record) => record.applicationId !== applicationId || record.id === existingRecord.id);
       return current;
     });
 
-    res.status(201).json(record);
+    res.status(200).json(upsertedRecord);
   });
 
   server.post('/api/users', authRequired, requireRole('admin'), (req, res) => {
@@ -553,6 +620,15 @@ app.prepare().then(() => {
         res.status(400).json({ error: 'Field name cannot be empty' });
         return;
       }
+
+      const duplicateName = db.fields.find((entry) => entry.applicationId === field.applicationId
+        && entry.id !== field.id
+        && normalizeFieldName(entry.name) === normalizeFieldName(nextName));
+      if (duplicateName) {
+        res.status(409).json({ error: 'Field name already exists in this application' });
+        return;
+      }
+
       field.name = nextName;
     }
 

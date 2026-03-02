@@ -19,6 +19,7 @@ export default function AdminPage() {
   const [search, setSearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedApp, setSelectedApp] = useState('');
+  const [selectedFieldApp, setSelectedFieldApp] = useState('');
   const [recordTextValues, setRecordTextValues] = useState({});
   const [recordFiles, setRecordFiles] = useState({});
   const [statusMessage, setStatusMessage] = useState('');
@@ -141,10 +142,33 @@ export default function AdminPage() {
   };
 
   const createField = async () => {
-    await fetch(`/api/applications/${selectedApp}/fields`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fieldForm) });
-    setFieldModal(false);
-    setFieldForm({ name: '', type: 'text' });
-    refresh();
+    const isBulkCreate = selectedFieldApp === '__all__';
+    const endpoint = isBulkCreate ? '/api/applications/all/fields' : `/api/applications/${selectedFieldApp}/fields`;
+    const payload = isBulkCreate
+      ? { ...fieldForm, applicationIds: applications.map((application) => application.id) }
+      : fieldForm;
+
+    setStatusMessage('');
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const responsePayload = await response.json();
+      if (!response.ok) {
+        setStatusMessage(responsePayload.error || 'Field creation failed.');
+        return;
+      }
+
+      setFieldModal(false);
+      setSelectedFieldApp('');
+      setFieldForm({ name: '', type: 'text' });
+      setStatusMessage(isBulkCreate ? 'Field successfully added to all applications' : 'Field successfully added');
+      refresh();
+    } catch {
+      setStatusMessage('Field creation request failed. Please retry.');
+    }
   };
 
   const createUser = async () => {
@@ -463,8 +487,9 @@ export default function AdminPage() {
       </Modal>
 
       <Modal open={fieldModal} onClose={() => setFieldModal(false)} title="Create Dynamic Field">
-        <select className="select" value={selectedApp} onChange={(event) => setSelectedApp(event.target.value)}>
+        <select className="select" value={selectedFieldApp} onChange={(event) => setSelectedFieldApp(event.target.value)}>
           <option value="">Select application</option>
+          <option value="__all__">All Applications</option>
           {applications.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}
         </select>
         <Input placeholder="Field name" value={fieldForm.name} onChange={(event) => setFieldForm({ ...fieldForm, name: event.target.value })} />
@@ -473,7 +498,7 @@ export default function AdminPage() {
           <option value="pdf">PDF</option>
           <option value="image">Image</option>
         </select>
-        <Button onClick={createField} disabled={!selectedApp || !fieldForm.name.trim()}>Create</Button>
+        <Button onClick={createField} disabled={!selectedFieldApp || !fieldForm.name.trim()}>Create</Button>
       </Modal>
 
       <Modal open={userModal} onClose={() => setUserModal(false)} title="Create Read-only User">

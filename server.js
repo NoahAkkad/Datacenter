@@ -262,27 +262,56 @@ app.prepare().then(() => {
 
   server.post('/api/applications/:applicationId/fields', authRequired, requireRole('admin'), (req, res) => {
     const { applicationId } = req.params;
-    const { name, type } = req.body;
+    const { name, type, applicationIds = [] } = req.body;
     const allowedTypes = ['text', 'pdf', 'image'];
+    const nextName = sanitizeText(name);
 
     if (!allowedTypes.includes(type)) {
       res.status(400).json({ error: 'Invalid field type' });
       return;
     }
 
-    const db = readDb();
-    if (!db.applications.find((a) => a.id === applicationId)) {
-      res.status(404).json({ error: 'Application not found' });
+    if (!nextName) {
+      res.status(400).json({ error: 'Field name is required' });
       return;
     }
 
-    const field = { id: nextId('fld'), applicationId, name, type, createdAt: new Date().toISOString() };
+    const db = readDb();
+    const targetApplicationIds = applicationId === 'all'
+      ? Array.from(new Set(applicationIds.map((id) => sanitizeText(id)).filter(Boolean)))
+      : [applicationId];
+
+    if (applicationId === 'all' && targetApplicationIds.length === 0) {
+      res.status(400).json({ error: 'At least one application ID is required for bulk field creation' });
+      return;
+    }
+
+    const missingApplication = targetApplicationIds.find((id) => !db.applications.find((a) => a.id === id));
+    if (missingApplication) {
+      res.status(404).json({ error: `Application not found: ${missingApplication}` });
+      return;
+    }
+
+    const createdAt = new Date().toISOString();
+    const fieldsToCreate = targetApplicationIds.map((targetApplicationId) => ({
+      id: nextId('fld'),
+      applicationId: targetApplicationId,
+      name: nextName,
+      type,
+      createdAt
+    }));
+
     withDb((current) => {
-      current.fields.push(field);
+      current.fields.push(...fieldsToCreate);
       return current;
     });
 
-    res.status(201).json(field);
+    if (fieldsToCreate.length === 1) {
+      res.status(201).json(fieldsToCreate[0]);
+      return;
+    }
+
+    res.status(201).json({ count: fieldsToCreate.length, fields: fieldsToCreate });
   });
 
   server.post('/api/applications/:applicationId/records', authRequired, requireRole('admin'), upload.any(), (req, res) => {

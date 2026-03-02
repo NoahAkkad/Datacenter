@@ -45,12 +45,6 @@ function LoginContent() {
     window.localStorage.setItem(PREVIOUS_USERS_KEY, JSON.stringify(nextUsers));
   };
 
-  const clearSavedUsers = () => {
-    setSavedUsers([]);
-    window.localStorage.removeItem(PREVIOUS_USERS_KEY);
-    setShowSuggestions(false);
-  };
-
   const suggestions = useMemo(() => {
     const usernameInput = form.username.trim().toLowerCase();
     if (!usernameInput) return savedUsers;
@@ -133,11 +127,6 @@ function LoginContent() {
                 </ul>
               )}
 
-              {savedUsers.length > 0 && (
-                <button type="button" className="username-clear-btn" onClick={clearSavedUsers}>
-                  Clear saved usernames
-                </button>
-              )}
             </div>
             <Input required type="password" placeholder="Password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
             {error && <p className="error">{error}</p>}

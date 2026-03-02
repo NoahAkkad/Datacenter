@@ -30,13 +30,15 @@ export default function AdminPage() {
   const [appModal, setAppModal] = useState(false);
   const [fieldModal, setFieldModal] = useState(false);
   const [userModal, setUserModal] = useState(false);
+  const [tagModal, setTagModal] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ open: false, type: '', id: '', label: '' });
   const [editing, setEditing] = useState({ open: false, type: '', id: '', payload: {}, title: '' });
 
   const [companyName, setCompanyName] = useState('');
   const [appName, setAppName] = useState('');
-  const [fieldForm, setFieldForm] = useState({ name: '', type: 'text' });
+  const [fieldForm, setFieldForm] = useState({ name: '', type: 'text', tagId: '' });
   const [userForm, setUserForm] = useState({ username: '', password: '' });
+  const [tagForm, setTagForm] = useState({ applicationId: '', name: '', description: '' });
   const [checkingSession, setCheckingSession] = useState(true);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -104,6 +106,16 @@ export default function AdminPage() {
       [application.id]: new Set((application.fields || []).map((field) => String(field.name || '').trim().toLowerCase()))
     }), {}),
     [applications]
+  );
+
+  const selectedFieldApplication = useMemo(
+    () => applications.find((application) => application.id === selectedFieldApp),
+    [applications, selectedFieldApp]
+  );
+
+  const availableTags = useMemo(
+    () => (selectedFieldApplication?.tags || []),
+    [selectedFieldApplication]
   );
 
   useEffect(() => {
@@ -191,7 +203,7 @@ export default function AdminPage() {
 
       setFieldModal(false);
       setSelectedFieldApp('');
-      setFieldForm({ name: '', type: 'text' });
+      setFieldForm({ name: '', type: 'text', tagId: '' });
       setStatusMessage(isBulkCreate ? 'Field successfully added to all applications' : 'Field successfully added');
       refresh();
     } catch {
@@ -204,6 +216,28 @@ export default function AdminPage() {
     setUserModal(false);
     setUserForm({ username: '', password: '' });
     refresh();
+  };
+
+  const createTag = async () => {
+    setStatusMessage('');
+    try {
+      const response = await fetch(`/api/applications/${tagForm.applicationId}/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: tagForm.name, description: tagForm.description })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setStatusMessage(payload.error || 'Tag creation failed.');
+        return;
+      }
+      setTagModal(false);
+      setTagForm({ applicationId: '', name: '', description: '' });
+      setStatusMessage('Tag successfully added.');
+      refresh();
+    } catch {
+      setStatusMessage('Tag creation request failed. Please retry.');
+    }
   };
 
   const fetchCompanyFields = async (companyId) => {
@@ -305,7 +339,8 @@ export default function AdminPage() {
   const openEdit = (type, row) => {
     if (type === 'company') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Company' });
     if (type === 'application') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Application' });
-    if (type === 'field') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Field' });
+    if (type === 'field') setEditing({ open: true, type, id: row.id, payload: { name: row.name, tagId: row.tagId || '' }, title: 'Edit Field' });
+    if (type === 'tag') setEditing({ open: true, type, id: row.id, payload: { name: row.name, description: row.description || '' }, title: 'Edit Tag' });
     if (type === 'data') setEditing({ open: true, type, id: row.id, payload: { values: row.values || {} }, title: `Edit Record ${row.id}` });
     if (type === 'user') setEditing({ open: true, type, id: row.id, payload: { username: row.username, password: '' }, title: 'Edit User' });
   };
@@ -348,6 +383,17 @@ export default function AdminPage() {
 
     if (type === 'user') {
       setUsers((current) => current.map((user) => (user.id === id ? { ...user, ...updatedEntity } : user)));
+      return;
+    }
+
+    if (type === 'tag') {
+      setData((current) => current.map((company) => ({
+        ...company,
+        applications: company.applications.map((application) => ({
+          ...application,
+          tags: (application.tags || []).map((tag) => (tag.id === id ? { ...tag, ...updatedEntity } : tag))
+        }))
+      })));
     }
   };
 
@@ -359,7 +405,8 @@ export default function AdminPage() {
       application: `/api/applications/${id}`,
       field: `/api/fields/${id}`,
       data: `/api/records/${id}`,
-      user: `/api/users/${id}`
+      user: `/api/users/${id}`,
+      tag: `/api/tags/${id}`
     };
 
     if (!endpointMap[type] || !id) {
@@ -370,8 +417,10 @@ export default function AdminPage() {
     const payload = { ...draftPayload };
     if (type === 'user' && !payload.password) delete payload.password;
     if (type === 'field' && payload.order === '') delete payload.order;
+    if (type === 'field' && !payload.tagId) payload.tagId = '';
 
-    if ((type === 'company' || type === 'application') && !String(payload.name || '').trim()) {
+
+    if ((type === 'company' || type === 'application' || type === 'tag') && !String(payload.name || '').trim()) {
       setStatusMessage('Name is required.');
       return;
     }
@@ -464,7 +513,8 @@ export default function AdminPage() {
       application: `/api/application/${id}`,
       field: `/api/field/${id}`,
       data: `/api/data/${id}`,
-      user: `/api/users/${id}`
+      user: `/api/users/${id}`,
+      tag: `/api/tags/${id}`
     };
 
     if (type === 'user') {
@@ -556,6 +606,7 @@ export default function AdminPage() {
             <Button onClick={() => setCompanyModal(true)}>New Company</Button>
             <Button variant="secondary" onClick={() => setAppModal(true)}>New Application</Button>
             <Button variant="secondary" onClick={() => setFieldModal(true)}>New Field</Button>
+            <Button variant="secondary" onClick={() => setTagModal(true)}>New Tag</Button>
             <Button variant="secondary" onClick={() => setUserModal(true)}>New User</Button>
           </div>
         </Card>
@@ -599,8 +650,15 @@ export default function AdminPage() {
             <h2>Dynamic Fields Management</h2>
             {fields.map((field) => (
               <div className="row" key={field.id}>
-                <Badge>{field.name} · {field.type} · {field.appName}</Badge>
+                <Badge>{field.name} · {field.type} · {field.tagName || 'General'} · {field.appName}</Badge>
                 <div className="row"><Button variant="secondary" onClick={() => openEdit('field', field)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('field', field.id, field.name)}>Delete</Button></div>
+              </div>
+            ))}
+            <h3 className="section-mini-gap">Tag Management</h3>
+            {applications.flatMap((application) => (application.tags || []).map((tag) => ({ ...tag, applicationName: application.name }))).map((tag) => (
+              <div className="row" key={tag.id}>
+                <Badge>{tag.name} · {tag.applicationName}</Badge>
+                <div className="row"><Button variant="secondary" onClick={() => openEdit('tag', tag)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('tag', tag.id, tag.name)}>Delete</Button></div>
               </div>
             ))}
           </Card> : null}
@@ -726,7 +784,11 @@ export default function AdminPage() {
       </Modal>
 
       <Modal open={fieldModal} onClose={() => setFieldModal(false)} title="Create Dynamic Field">
-        <select className="select" value={selectedFieldApp} onChange={(event) => setSelectedFieldApp(event.target.value)}>
+        <select className="select" value={selectedFieldApp} onChange={(event) => {
+          const nextApplicationId = event.target.value;
+          setSelectedFieldApp(nextApplicationId);
+          setFieldForm((current) => ({ ...current, tagId: '' }));
+        }}>
           <option value="">Select application</option>
           <option value="__all__">All Applications</option>
           {applications.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}
@@ -737,7 +799,21 @@ export default function AdminPage() {
           <option value="pdf">PDF</option>
           <option value="image">Image</option>
         </select>
+        {selectedFieldApp && selectedFieldApp !== '__all__' ? <select className="select" value={fieldForm.tagId} onChange={(event) => setFieldForm({ ...fieldForm, tagId: event.target.value })}>
+          <option value="">General (default)</option>
+          {availableTags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+        </select> : null}
         <Button onClick={createField} disabled={!selectedFieldApp || !fieldForm.name.trim()}>Create</Button>
+      </Modal>
+
+      <Modal open={tagModal} onClose={() => setTagModal(false)} title="Create Tag">
+        <select className="select" value={tagForm.applicationId} onChange={(event) => setTagForm((current) => ({ ...current, applicationId: event.target.value }))}>
+          <option value="">Select application</option>
+          {applications.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}
+        </select>
+        <Input placeholder="Tag name" value={tagForm.name} onChange={(event) => setTagForm((current) => ({ ...current, name: event.target.value }))} />
+        <Input placeholder="Description (optional)" value={tagForm.description} onChange={(event) => setTagForm((current) => ({ ...current, description: event.target.value }))} />
+        <Button onClick={createTag} disabled={!tagForm.applicationId || !tagForm.name.trim()}>Create Tag</Button>
       </Modal>
 
       <Modal open={userModal} onClose={() => setUserModal(false)} title="Create Read-only User">
@@ -749,8 +825,18 @@ export default function AdminPage() {
       <Modal open={editing.open} onClose={() => !savingEdit && setEditing({ open: false, type: '', id: '', payload: {}, title: '' })} title={editing.title}>
         {editing.type === 'company' || editing.type === 'application' ? <Input value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} /> : null}
         {editing.type === 'field' ? (
-          <Input placeholder="Field name" value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} />
+          <>
+            <Input placeholder="Field name" value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} />
+            <select className="select" value={editing.payload.tagId || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, tagId: event.target.value } }))}>
+              <option value="">General (default)</option>
+              {(applications.find((app) => (app.fields || []).some((field) => field.id === editing.id))?.tags || []).map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+            </select>
+          </>
         ) : null}
+        {editing.type === 'tag' ? <>
+          <Input placeholder="Tag name" value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} />
+          <Input placeholder="Description (optional)" value={editing.payload.description || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, description: event.target.value } }))} />
+        </> : null}
         {editing.type === 'user' ? <>
           <Input placeholder="Username" value={editing.payload.username || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, username: event.target.value } }))} />
           <Input placeholder="New password (optional)" type="password" value={editing.payload.password || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, password: event.target.value } }))} />

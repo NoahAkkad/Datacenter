@@ -87,3 +87,6 @@ th { background: #f8fafc; font-size: 12px; text-transform: uppercase; color: #64
 .section-mini-gap{margin-top:8px;}
 
 .preview-image{max-width:100%;border-radius:12px;}
+
+.tag-section{border:1px solid #e2e8f0;border-radius:12px;padding:10px;background:#f8fafc;}
+.tag-header{width:100%;display:flex;justify-content:space-between;align-items:center;border:0;background:transparent;padding:2px 0 8px;cursor:pointer;color:#0f172a;}

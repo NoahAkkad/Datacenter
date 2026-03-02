@@ -26,6 +26,7 @@ export default function ApplicationDetailsPage() {
   const [application, setApplication] = useState(null);
   const [error, setError] = useState('');
   const [imagePreview, setImagePreview] = useState('');
+  const [collapsedSections, setCollapsedSections] = useState({});
 
   useEffect(() => {
     const loadApplication = async () => {

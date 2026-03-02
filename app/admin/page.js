@@ -91,6 +91,14 @@ export default function AdminPage() {
     [applications, selectedApp]
   );
 
+  const existingFieldNamesByApplication = useMemo(
+    () => applications.reduce((accumulator, application) => ({
+      ...accumulator,
+      [application.id]: new Set((application.fields || []).map((field) => String(field.name || '').trim().toLowerCase()))
+    }), {}),
+    [applications]
+  );
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
@@ -151,6 +159,16 @@ export default function AdminPage() {
       ? { ...fieldForm, applicationIds: applications.map((application) => application.id) }
       : fieldForm;
 
+    const normalizedName = fieldForm.name.trim().toLowerCase();
+    const duplicateExists = isBulkCreate
+      ? applications.some((application) => existingFieldNamesByApplication[application.id]?.has(normalizedName))
+      : existingFieldNamesByApplication[selectedFieldApp]?.has(normalizedName);
+
+    if (duplicateExists) {
+      setStatusMessage('Field name already exists in the selected application.');
+      return;
+    }
+
     setStatusMessage('');
     try {
       const response = await fetch(endpoint, {
@@ -187,9 +205,18 @@ export default function AdminPage() {
     Object.entries(recordFiles).forEach(([fieldId, file]) => {
       if (file) formData.append(fieldId, file);
     });
-    await fetch(`/api/applications/${selectedApp}/records`, { method: 'POST', body: formData });
+
+    setStatusMessage('');
+    const response = await fetch(`/api/applications/${selectedApp}/records`, { method: 'POST', body: formData });
+    const responsePayload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setStatusMessage(responsePayload.error || 'Record save failed.');
+      return;
+    }
+
     setRecordTextValues({});
     setRecordFiles({});
+    setStatusMessage('Record saved successfully.');
     refresh();
   };
 

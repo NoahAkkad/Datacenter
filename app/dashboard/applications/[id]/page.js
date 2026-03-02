@@ -65,7 +65,7 @@ export default function ApplicationDetailsPage() {
       <div className="dashboard-header">
         <div>
           <h1 className="title">{application?.name || 'Application Details'}</h1>
-          <p className="subtitle">Read-only application data.</p>
+          <p className="subtitle">{application?.companyName ? `Company: ${application.companyName}` : 'Read-only application data.'}</p>
         </div>
         <Link href="/dashboard"><Button variant="secondary">Back to Applications</Button></Link>
       </div>
@@ -77,27 +77,22 @@ export default function ApplicationDetailsPage() {
       {application?.records?.length === 0 ? (
         <Card><p className="subtitle">No records available.</p></Card>
       ) : (
-        <div className="stack">
-          {application?.records?.map((record, index) => (
-            <Card key={`${record.createdAt}-${index}`}>
-              <h3>Record {index + 1}</h3>
-              <div className="stack section-mini-gap">
-                {record.fields.map((field) => (
-                  <div key={`${field.label}-${field.type}`} className="field-row">
-                    <strong>{field.label}</strong>
-                    {field.type === 'text' ? (
-                      <span>{field.value}</span>
-                    ) : field.type === 'pdf' ? (
-                      <a className="link" href={field.fileUrl} target="_blank" rel="noreferrer">Open PDF</a>
-                    ) : (
-                      <button className="button secondary" onClick={() => setImagePreview(field.fileUrl)}>Preview Image</button>
-                    )}
-                  </div>
-                ))}
+        <Card>
+          <div className="stack section-mini-gap">
+            {application.records[0].fields.map((field) => (
+              <div key={`${field.label}-${field.type}`} className="field-row">
+                <strong>{field.label}</strong>
+                {field.type === 'text' ? (
+                  <span>{field.value}</span>
+                ) : field.type === 'pdf' ? (
+                  <a className="link" href={field.fileUrl} target="_blank" rel="noreferrer">Open PDF</a>
+                ) : (
+                  <button className="button secondary" onClick={() => setImagePreview(field.fileUrl)}>Preview Image</button>
+                )}
               </div>
-            </Card>
-          ))}
-        </div>
+            ))}
+          </div>
+        </Card>
       )}
 
       <Modal open={Boolean(imagePreview)} onClose={() => setImagePreview('')} title="Image Preview">

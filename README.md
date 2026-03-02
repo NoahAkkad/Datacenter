@@ -38,6 +38,8 @@ Create `.env.local` for local development:
 
 ```bash
 JWT_SECRET=replace-with-a-long-random-secret
+DATABASE_URL=file:///tmp/datacenter-db.json
+DEFAULT_ADMIN_USERNAME=admin
 DEFAULT_ADMIN_PASSWORD=change-me
 
 # Cloud upload adapter
@@ -59,6 +61,25 @@ ALLOWED_ORIGIN=https://your-frontend-domain.com
 - **Render**: Service → Environment tab.
 
 After setting variables, redeploy the project.
+
+
+## Production-safe login notes
+
+- Login API route is serverless-compatible (`pages/api/auth/login.js`) and uses structured `try/catch` error responses for easier debugging in hosting logs.
+- Frontend login requests should always use relative URLs, for example: `fetch('/api/auth/login', { ... })`.
+- Runtime env validation now checks that `JWT_SECRET` exists before signing/verifying tokens.
+- For production, configure a cloud/external database connection via `DATABASE_URL` (or at minimum `DB_PATH` for file-backed deployments).
+
+```js
+const response = await fetch('/api/auth/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ username, password, portal: 'admin' })
+});
+
+const payload = await response.json();
+if (!response.ok) throw new Error(payload.error || 'Login failed');
+```
 
 ## Cloud upload behavior
 
@@ -113,6 +134,16 @@ Default admin user:
 
 - username: `admin`
 - password: `admin123` (or `DEFAULT_ADMIN_PASSWORD`)
+
+
+## Login deployment checklist (Vercel/Render/Netlify)
+
+1. Set required env vars in the hosting dashboard: `JWT_SECRET`, `DEFAULT_ADMIN_PASSWORD`, and `DATABASE_URL` (or `DB_PATH`).
+2. Confirm the DB target is reachable from production and is not `localhost`.
+3. Redeploy after env var updates.
+4. Verify login by sending a POST to `/api/auth/login` with valid credentials.
+5. If login fails, inspect platform logs for the `Login error:` stack trace and returned `error` message.
+6. Ensure frontend code uses `fetch('/api/auth/login', ...)` (no hardcoded localhost domain).
 
 ## Production validation checklist
 

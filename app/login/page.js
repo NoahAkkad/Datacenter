@@ -2,6 +2,9 @@
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Card } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/button';
 
 export default function LoginPage() {
   const params = useSearchParams();
@@ -10,33 +13,49 @@ export default function LoginPage() {
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
+  const onSubmit = async (event) => {
+    event.preventDefault();
     setError('');
-    const res = await fetch('/api/auth/login', {
+
+    const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...form, portal })
     });
 
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || 'Login failed');
+    if (!response.ok) {
+      const payload = await response.json();
+      setError(payload.error || 'Login failed');
       return;
     }
 
     router.push(portal === 'admin' ? '/admin' : '/dashboard');
   };
 
+  const isAdmin = portal === 'admin';
+
   return (
-    <section className="card">
-      <h1>{portal === 'admin' ? 'Admin Portal' : 'User Portal'} Login</h1>
-      <form onSubmit={onSubmit} className="stack">
-        <input placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
-        <input type="password" placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-        {error && <p className="error">{error}</p>}
-        <button type="submit" className="button">Login</button>
-      </form>
-    </section>
+    <main className="page-center">
+      <div className="auth-wrap fade-in">
+        <Card className="stack">
+          <div>
+            <h1 className="login-title">{isAdmin ? '🛡️ Admin Portal Login' : '👤 User Portal Login'}</h1>
+            <p className="subtitle">Welcome back. Sign in to continue.</p>
+          </div>
+
+          <div className="pill-switch">
+            <button className={isAdmin ? 'active' : ''} onClick={() => router.push('/login?portal=admin')}>Admin</button>
+            <button className={!isAdmin ? 'active' : ''} onClick={() => router.push('/login?portal=user')}>User</button>
+          </div>
+
+          <form className="stack" onSubmit={onSubmit}>
+            <Input required placeholder="Username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
+            <Input required type="password" placeholder="Password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+            {error && <p className="error">{error}</p>}
+            <Button type="submit">Sign In</Button>
+          </form>
+        </Card>
+      </div>
+    </main>
   );
 }

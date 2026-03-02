@@ -2,15 +2,13 @@ import './globals.css';
 
 export const metadata = {
   title: 'Data Center Management',
-  description: 'Simple data center management system'
+  description: 'Enterprise-grade data center management interface'
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>
-        <main className="container">{children}</main>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

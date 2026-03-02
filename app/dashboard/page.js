@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -16,8 +16,12 @@ export default function DashboardPage() {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [error, setError] = useState('');
+  const hasValidatedSession = useRef(false);
 
   useEffect(() => {
+    if (hasValidatedSession.current) return;
+    hasValidatedSession.current = true;
+
     const validateSession = async () => {
       const response = await fetch('/api/auth/me');
       if (!response.ok) {

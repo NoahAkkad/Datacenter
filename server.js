@@ -33,6 +33,13 @@ const upload = multer({
   }
 });
 
+const authCookieOptions = {
+  httpOnly: true,
+  sameSite: 'strict',
+  secure: !dev,
+  path: '/'
+};
+
 function authRequired(req, res, nextFn) {
   try {
     const token = req.cookies.auth;
@@ -91,19 +98,35 @@ app.prepare().then(() => {
 
     const token = signToken({ id: user.id, username: user.username, role: user.role });
     res.cookie('auth', token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: !dev,
+      ...authCookieOptions,
       maxAge: 8 * 60 * 60 * 1000
     });
 
     res.json({ id: user.id, username: user.username, role: user.role });
   });
 
-  server.post('/api/auth/logout', (_, res) => {
-    res.clearCookie('auth');
+  const logoutHandler = (req, res) => {
+    const origin = req.get('origin');
+    const host = req.get('host');
+    if (origin && host) {
+      try {
+        const originHost = new URL(origin).host;
+        if (originHost !== host) {
+          res.status(403).json({ error: 'Invalid origin' });
+          return;
+        }
+      } catch {
+        res.status(403).json({ error: 'Invalid origin' });
+        return;
+      }
+    }
+
+    res.clearCookie('auth', authCookieOptions);
     res.json({ ok: true });
-  });
+  };
+
+  server.post('/api/auth/logout', logoutHandler);
+  server.post('/api/logout', logoutHandler);
 
   server.get('/api/auth/me', authRequired, (req, res) => {
     res.json(req.user);

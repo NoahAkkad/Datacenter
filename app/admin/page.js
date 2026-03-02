@@ -15,6 +15,7 @@ export default function AdminPage() {
   const [collapsed, setCollapsed] = useState(false);
   const [active, setActive] = useState('home');
   const [data, setData] = useState([]);
+  const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedApp, setSelectedApp] = useState('');
@@ -27,6 +28,7 @@ export default function AdminPage() {
   const [fieldModal, setFieldModal] = useState(false);
   const [userModal, setUserModal] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ open: false, type: '', id: '', label: '' });
+  const [editing, setEditing] = useState({ open: false, type: '', id: '', payload: {}, title: '' });
 
   const [companyName, setCompanyName] = useState('');
   const [appName, setAppName] = useState('');
@@ -37,6 +39,7 @@ export default function AdminPage() {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     const validateSession = async () => {
@@ -61,11 +64,19 @@ export default function AdminPage() {
     () => data.flatMap((company) => company.applications.map((app) => ({ ...app, companyName: company.name }))),
     [data]
   );
-  const fields = useMemo(() => applications.flatMap((app) => app.fields || []).map((field) => ({ ...field, appName: applications.find((app) => app.id === field.applicationId)?.name || '-' })), [applications]);
+
+  const fields = useMemo(
+    () => applications
+      .flatMap((app) => app.fields || [])
+      .map((field) => ({ ...field, appName: applications.find((app) => app.id === field.applicationId)?.name || '-' })),
+    [applications]
+  );
+
   const records = useMemo(
     () => applications.flatMap((app) => (app.records || []).map((record) => ({ ...record, appName: app.name }))),
     [applications]
   );
+
   const selectedApplication = useMemo(
     () => applications.find((entry) => entry.id === selectedApp),
     [applications, selectedApp]
@@ -78,8 +89,13 @@ export default function AdminPage() {
   }, []);
 
   const refresh = async () => {
-    const response = await fetch('/api/companies');
-    if (response.ok) setData(await response.json());
+    const [companyResponse, userResponse] = await Promise.all([
+      fetch('/api/companies'),
+      fetch('/api/users')
+    ]);
+
+    if (companyResponse.ok) setData(await companyResponse.json());
+    if (userResponse.ok) setUsers(await userResponse.json());
   };
 
   useEffect(() => {
@@ -127,6 +143,7 @@ export default function AdminPage() {
     await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...userForm, role: 'user' }) });
     setUserModal(false);
     setUserForm({ username: '', password: '' });
+    refresh();
   };
 
   const createRecord = async () => {
@@ -142,6 +159,50 @@ export default function AdminPage() {
   };
 
   const openDelete = (type, id, label) => setConfirmModal({ open: true, type, id, label });
+
+  const openEdit = (type, row) => {
+    if (type === 'company') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Company' });
+    if (type === 'application') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Application' });
+    if (type === 'field') setEditing({ open: true, type, id: row.id, payload: { name: row.name, label: row.label || '', order: row.order ?? '' }, title: 'Edit Field' });
+    if (type === 'data') setEditing({ open: true, type, id: row.id, payload: { values: row.values || {} }, title: `Edit Record ${row.id}` });
+    if (type === 'user') setEditing({ open: true, type, id: row.id, payload: { username: row.username, password: '' }, title: 'Edit User' });
+  };
+
+  const executeEdit = async () => {
+    const endpointMap = {
+      company: `/api/company/${editing.id}`,
+      application: `/api/application/${editing.id}`,
+      field: `/api/field/${editing.id}`,
+      data: `/api/data/${editing.id}`,
+      user: `/api/user/${editing.id}`
+    };
+
+    const payload = { ...editing.payload };
+    if (editing.type === 'user' && !payload.password) delete payload.password;
+    if (editing.type === 'field' && payload.order === '') delete payload.order;
+
+    setSavingEdit(true);
+    setStatusMessage('');
+    try {
+      const response = await fetch(endpointMap[editing.type], {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setStatusMessage(payload.error || 'Update failed.');
+        return;
+      }
+      setEditing({ open: false, type: '', id: '', payload: {}, title: '' });
+      setStatusMessage('Update completed successfully.');
+      refresh();
+    } catch {
+      setStatusMessage('Update request failed. Please retry.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const optimisticDelete = (type, id) => {
     if (type === 'company') {
@@ -227,12 +288,7 @@ export default function AdminPage() {
 
   return (
     <main className="admin-shell">
-      <AdminSidebar
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((value) => !value)}
-        activeTab={active}
-        onNavigate={onSidebarNavigate}
-      />
+      <AdminSidebar collapsed={collapsed} onToggle={() => setCollapsed((value) => !value)} activeTab={active} onNavigate={onSidebarNavigate} />
 
       <section className="main">
         <header className="topbar">
@@ -245,11 +301,7 @@ export default function AdminPage() {
               <strong>Administrator</strong>
               <p className="subtitle">admin@datacenter.io</p>
             </button>
-            {profileMenuOpen ? (
-              <div className="profile-menu">
-                <button className="menu-item danger" onClick={() => setLogoutConfirmOpen(true)}>Logout</button>
-              </div>
-            ) : null}
+            {profileMenuOpen ? <div className="profile-menu"><button className="menu-item danger" onClick={() => setLogoutConfirmOpen(true)}>Logout</button></div> : null}
           </div>
         </header>
 
@@ -265,51 +317,51 @@ export default function AdminPage() {
           </div>
         </Card>
 
-        {active === 'home' || active === 'companies' ? (
-        <div className="grid-2 section-gap">
+        {active === 'home' || active === 'companies' ? <div className="grid-2 section-gap">
           <Card className="stack">
             <h2>Companies Management</h2>
             <DataTable
               columns={[
                 { key: 'name', label: 'Company Name' },
                 { key: 'apps', label: 'Applications', render: (row) => row.applications.length },
-                { key: 'actions', label: 'Actions', render: (row) => <Button onClick={() => openDelete('company', row.id, row.name)}>Delete</Button> }
+                {
+                  key: 'actions',
+                  label: 'Actions',
+                  render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('company', row)}>Edit</Button><Button onClick={() => openDelete('company', row.id, row.name)}>Delete</Button></div>
+                }
               ]}
               data={filteredCompanies}
             />
           </Card>
-          {active === 'home' ? (
-          <Card className="stack">
+          {active === 'home' ? <Card className="stack">
             <h2>Applications per Company</h2>
             <DataTable
               columns={[
                 { key: 'name', label: 'Application' },
                 { key: 'companyName', label: 'Company' },
                 { key: 'fields', label: 'Fields', render: (row) => row.fields?.length || 0 },
-                { key: 'actions', label: 'Actions', render: (row) => <Button onClick={() => openDelete('application', row.id, row.name)}>Delete</Button> }
+                {
+                  key: 'actions',
+                  label: 'Actions',
+                  render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('application', row)}>Edit</Button><Button onClick={() => openDelete('application', row.id, row.name)}>Delete</Button></div>
+                }
               ]}
               data={applications}
             />
-          </Card>
-          ) : null}
-        </div>
-        ) : null}
+          </Card> : null}
+        </div> : null}
 
-        {active === 'home' || active === 'applications' || active === 'fields' ? (
-        <div className="grid-2 section-gap">
-          {active === 'home' || active === 'fields' ? (
-          <Card className="stack">
+        {active === 'home' || active === 'applications' || active === 'fields' ? <div className="grid-2 section-gap">
+          {active === 'home' || active === 'fields' ? <Card className="stack">
             <h2>Dynamic Fields Management</h2>
             {fields.map((field) => (
               <div className="row" key={field.id}>
                 <Badge>{field.name} · {field.type} · {field.appName}</Badge>
-                <Button variant="secondary" onClick={() => openDelete('field', field.id, field.name)}>Delete</Button>
+                <div className="row"><Button variant="secondary" onClick={() => openEdit('field', field)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('field', field.id, field.name)}>Delete</Button></div>
               </div>
             ))}
-          </Card>
-          ) : null}
-          {active === 'home' || active === 'applications' ? (
-          <Card className="stack">
+          </Card> : null}
+          {active === 'home' || active === 'applications' ? <Card className="stack">
             <h2>Data Listing</h2>
             <DataTable
               columns={[
@@ -318,44 +370,46 @@ export default function AdminPage() {
                 {
                   key: 'actions',
                   label: 'Actions',
-                  render: (row) => <Button variant="secondary" onClick={() => openDelete('data', row.id, `${row.appName} / ${row.id}`)}>Delete</Button>
+                  render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('data', row)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('data', row.id, `${row.appName} / ${row.id}`)}>Delete</Button></div>
                 }
               ]}
               data={records}
             />
-          </Card>
-          ) : null}
-        </div>
-        ) : null}
+          </Card> : null}
+        </div> : null}
 
-        {active === 'home' || active === 'upload' ? (
-        <div className="grid-2 section-gap">
-          <Card className="stack">
-            <h2>File Upload (PDF & Images)</h2>
-            <select className="select" value={selectedApp} onChange={(event) => setSelectedApp(event.target.value)}>
-              <option value="">Select application</option>
-              {applications.map((app) => <option key={app.id} value={app.id}>{app.name} · {app.companyName}</option>)}
-            </select>
-            {selectedApplication?.fields?.map((field) => (
-              <div key={field.id}>
-                <strong>{field.name}</strong>
-                {field.type === 'text' ? <Input onChange={(event) => setRecordTextValues({ ...recordTextValues, [field.id]: event.target.value })} /> : <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles({ ...recordFiles, [field.id]: event.target.files?.[0] })} />}
-              </div>
-            ))}
-            <Button onClick={createRecord} disabled={!selectedApp}>Upload Record</Button>
-          </Card>
-        </div>
-        ) : null}
+        {active === 'home' || active === 'upload' ? <div className="grid-2 section-gap"><Card className="stack">
+          <h2>File Upload (PDF & Images)</h2>
+          <select className="select" value={selectedApp} onChange={(event) => setSelectedApp(event.target.value)}>
+            <option value="">Select application</option>
+            {applications.map((app) => <option key={app.id} value={app.id}>{app.name} · {app.companyName}</option>)}
+          </select>
+          {selectedApplication?.fields?.map((field) => (
+            <div key={field.id}>
+              <strong>{field.name}</strong>
+              {field.type === 'text'
+                ? <Input onChange={(event) => setRecordTextValues({ ...recordTextValues, [field.id]: event.target.value })} />
+                : <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles({ ...recordFiles, [field.id]: event.target.files?.[0] })} />}
+            </div>
+          ))}
+          <Button onClick={createRecord} disabled={!selectedApp}>Upload Record</Button>
+        </Card></div> : null}
 
-        {active === 'users' ? (
-        <div className="grid-2 section-gap">
+        {active === 'users' ? <div className="grid-2 section-gap">
           <Card className="stack">
             <h2>User Management</h2>
             <p className="subtitle">Create and manage normal users.</p>
             <Button onClick={() => setUserModal(true)}>New User</Button>
+            <DataTable
+              columns={[
+                { key: 'username', label: 'Username' },
+                { key: 'role', label: 'Role' },
+                { key: 'actions', label: 'Actions', render: (row) => <Button variant="secondary" onClick={() => openEdit('user', row)}>Edit</Button> }
+              ]}
+              data={users}
+            />
           </Card>
-        </div>
-        ) : null}
+        </div> : null}
       </section>
 
       <Modal open={companyModal} onClose={() => setCompanyModal(false)} title="Create Company">
@@ -390,6 +444,36 @@ export default function AdminPage() {
         <Input placeholder="Username" value={userForm.username} onChange={(event) => setUserForm({ ...userForm, username: event.target.value })} />
         <Input type="password" placeholder="Password" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} />
         <Button onClick={createUser} disabled={!userForm.username || !userForm.password}>Create User</Button>
+      </Modal>
+
+      <Modal open={editing.open} onClose={() => !savingEdit && setEditing({ open: false, type: '', id: '', payload: {}, title: '' })} title={editing.title}>
+        {editing.type === 'company' || editing.type === 'application' ? <Input value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} /> : null}
+        {editing.type === 'field' ? <>
+          <Input placeholder="Field name" value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} />
+          <Input placeholder="Field label" value={editing.payload.label || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, label: event.target.value } }))} />
+          <Input placeholder="Field order" type="number" value={editing.payload.order} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, order: event.target.value } }))} />
+        </> : null}
+        {editing.type === 'user' ? <>
+          <Input placeholder="Username" value={editing.payload.username || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, username: event.target.value } }))} />
+          <Input placeholder="New password (optional)" type="password" value={editing.payload.password || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, password: event.target.value } }))} />
+        </> : null}
+        {editing.type === 'data' ? fields.filter((field) => records.find((record) => record.id === editing.id)?.applicationId === field.applicationId).map((field) => {
+          const currentValue = editing.payload.values?.[field.id];
+          if (field.type === 'text') {
+            return <Input key={field.id} placeholder={field.name} value={currentValue || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, values: { ...current.payload.values, [field.id]: event.target.value } } }))} />;
+          }
+          return (
+            <div key={field.id} className="stack">
+              <strong>{field.name} metadata</strong>
+              <Input placeholder="File display name" value={currentValue?.originalname || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, values: { ...current.payload.values, [field.id]: { ...current.payload.values[field.id], originalname: event.target.value } } } }))} />
+              <Input placeholder="Description" value={currentValue?.description || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, values: { ...current.payload.values, [field.id]: { ...current.payload.values[field.id], description: event.target.value } } } }))} />
+            </div>
+          );
+        }) : null}
+        <div className="row">
+          <Button variant="secondary" onClick={() => setEditing({ open: false, type: '', id: '', payload: {}, title: '' })} disabled={savingEdit}>Cancel</Button>
+          <Button onClick={executeEdit} disabled={savingEdit}>{savingEdit ? 'Saving...' : 'Save changes'}</Button>
+        </div>
       </Modal>
 
       <Modal open={confirmModal.open} onClose={() => !deleting && setConfirmModal({ open: false, type: '', id: '', label: '' })} title="Confirm Deletion">

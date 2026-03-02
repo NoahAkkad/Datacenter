@@ -41,6 +41,8 @@ export default function AdminPage() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState('');
+  const [deletingUserId, setDeletingUserId] = useState('');
 
   useEffect(() => {
     const validateSession = async () => {
@@ -55,6 +57,7 @@ export default function AdminPage() {
         router.replace('/dashboard');
         return;
       }
+      setCurrentUserId(user.id || '');
       setCheckingSession(false);
     };
 
@@ -260,6 +263,11 @@ export default function AdminPage() {
         ...company,
         applications: company.applications.map((app) => ({ ...app, records: (app.records || []).filter((record) => record.id !== id) }))
       })));
+      return;
+    }
+
+    if (type === 'user') {
+      setUsers((current) => current.filter((user) => user.id !== id));
     }
   };
 
@@ -269,8 +277,13 @@ export default function AdminPage() {
       company: `/api/company/${id}`,
       application: `/api/application/${id}`,
       field: `/api/field/${id}`,
-      data: `/api/data/${id}`
+      data: `/api/data/${id}`,
+      user: `/api/users/${id}`
     };
+
+    if (type === 'user') {
+      setDeletingUserId(id);
+    }
 
     setDeleting(true);
     setStatusMessage('');
@@ -287,12 +300,13 @@ export default function AdminPage() {
       }
       optimisticDelete(type, id);
       setConfirmModal({ open: false, type: '', id: '', label: '' });
-      setStatusMessage('Deletion completed successfully.');
+      setStatusMessage(payload.message || 'Deletion completed successfully.');
       refresh();
     } catch {
       setStatusMessage('Delete request failed. Please retry.');
     } finally {
       setDeleting(false);
+      setDeletingUserId('');
     }
   };
 
@@ -464,7 +478,18 @@ export default function AdminPage() {
               columns={[
                 { key: 'username', label: 'Username' },
                 { key: 'role', label: 'Role' },
-                { key: 'actions', label: 'Actions', render: (row) => <Button variant="secondary" onClick={() => openEdit('user', row)}>Edit</Button> }
+                {
+                  key: 'actions',
+                  label: 'Actions',
+                  render: (row) => (
+                    <div className="row">
+                      <Button variant="secondary" onClick={() => openEdit('user', row)}>Edit</Button>
+                      {row.role === 'admin' || row.id === currentUserId
+                        ? <Button disabled title="Protected account">🗑️ Delete</Button>
+                        : <Button onClick={() => openDelete('user', row.id, row.username)} disabled={deletingUserId === row.id}>{deletingUserId === row.id ? 'Deleting...' : '🗑️ Delete'}</Button>}
+                    </div>
+                  )
+                }
               ]}
               data={users}
             />
@@ -538,7 +563,7 @@ export default function AdminPage() {
       </Modal>
 
       <Modal open={confirmModal.open} onClose={() => !deleting && setConfirmModal({ open: false, type: '', id: '', label: '' })} title="Confirm Deletion">
-        <p className="subtitle">This action is destructive and cannot be undone.</p>
+        <p className="subtitle">{confirmModal.type === 'user' ? 'Are you sure you want to delete this user? This action cannot be undone.' : 'This action is destructive and cannot be undone.'}</p>
         <p><strong>Target:</strong> {confirmModal.label}</p>
         <div className="row">
           <Button variant="secondary" onClick={() => setConfirmModal({ open: false, type: '', id: '', label: '' })} disabled={deleting}>Cancel</Button>

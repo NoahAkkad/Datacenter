@@ -23,8 +23,9 @@ export default function ApplicationDetailsPage() {
         return;
       }
 
-      const me = await meResponse.json();
-      if (me.role === 'admin') {
+      const mePayload = await meResponse.json();
+      const me = mePayload.data;
+      if (me?.role === 'admin') {
         router.replace('/admin');
         return;
       }
@@ -43,7 +44,7 @@ export default function ApplicationDetailsPage() {
       }
 
       const payload = await response.json();
-      setApplication(payload);
+      setApplication(payload.data);
       setLoading(false);
     };
 

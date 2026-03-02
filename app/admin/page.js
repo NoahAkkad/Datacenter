@@ -53,8 +53,9 @@ export default function AdminPage() {
         return;
       }
 
-      const user = await response.json();
-      if (user.role !== 'admin') {
+      const payload = await response.json();
+      const user = payload.data;
+      if (user?.role !== 'admin') {
         router.replace('/dashboard');
         return;
       }
@@ -80,7 +81,10 @@ export default function AdminPage() {
 
   const refresh = async () => {
     const response = await fetch('/api/companies');
-    if (response.ok) setData(await response.json());
+    if (response.ok) {
+      const payload = await response.json();
+      setData(payload.data || []);
+    }
   };
 
   useEffect(() => {

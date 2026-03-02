@@ -25,8 +25,9 @@ export default function DashboardPage() {
         return;
       }
 
-      const user = await response.json();
-      if (user.role === 'admin') {
+      const payload = await response.json();
+      const user = payload.data;
+      if (user?.role === 'admin') {
         router.replace('/admin');
         return;
       }
@@ -50,7 +51,7 @@ export default function DashboardPage() {
       }
 
       const payload = await response.json();
-      setApplications(payload.applications || []);
+      setApplications(payload.data?.applications || []);
     };
 
     loadApplications();

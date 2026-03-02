@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -42,6 +42,7 @@ export default function AdminPage() {
   const [userForm, setUserForm] = useState({ username: '', password: '' });
   const [checkingSession, setCheckingSession] = useState(true);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const hasValidatedSession = useRef(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -55,6 +56,9 @@ export default function AdminPage() {
   });
 
   useEffect(() => {
+    if (hasValidatedSession.current) return;
+    hasValidatedSession.current = true;
+
     const validateSession = async () => {
       const response = await fetch('/api/auth/me');
       if (!response.ok) {

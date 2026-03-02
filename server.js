@@ -76,6 +76,19 @@ function sanitizeText(value) {
   return String(value || '').trim();
 }
 
+function isNonEmptyId(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function logUpdateIssue(entity, message, meta = {}) {
+  // eslint-disable-next-line no-console
+  console.error(`[update:${entity}] ${message}`, meta);
+}
+
+function sendUpdateSuccess(res, data) {
+  res.status(200).json({ success: true, data });
+}
+
 
 function normalizeRecordFields(fields, recordValues = {}) {
   return fields
@@ -406,8 +419,20 @@ app.prepare().then(() => {
     })));
   });
 
-  server.put('/api/company/:id', authRequired, requireRole('admin'), (req, res) => {
+  const updateCompanyHandler = (req, res) => {
     const { id } = req.params;
+    if (!isNonEmptyId(id)) {
+      logUpdateIssue('company', 'Invalid ID', { id, body: req.body });
+      res.status(400).json({ error: 'Invalid ID' });
+      return;
+    }
+
+    if (!req.body || typeof req.body !== 'object') {
+      logUpdateIssue('company', 'Invalid request body', { id, bodyType: typeof req.body });
+      res.status(400).json({ error: 'Invalid request body' });
+      return;
+    }
+
     const nextName = sanitizeText(req.body?.name);
     if (!nextName) {
       res.status(400).json({ error: 'Company name is required' });
@@ -417,17 +442,29 @@ app.prepare().then(() => {
     const db = readDb();
     const company = db.companies.find((entry) => entry.id === id);
     if (!company) {
+      logUpdateIssue('company', 'Company not found', { id });
       res.status(404).json({ error: 'Company not found' });
       return;
     }
 
     company.name = nextName;
     writeDb(db);
-    res.json(company);
-  });
+    sendUpdateSuccess(res, company);
+  };
 
-  server.put('/api/application/:id', authRequired, requireRole('admin'), (req, res) => {
+  server.put('/api/company/:id', authRequired, requireRole('admin'), updateCompanyHandler);
+  server.patch('/api/company/:id', authRequired, requireRole('admin'), updateCompanyHandler);
+  server.put('/api/companies/:id', authRequired, requireRole('admin'), updateCompanyHandler);
+  server.patch('/api/companies/:id', authRequired, requireRole('admin'), updateCompanyHandler);
+
+  const updateApplicationHandler = (req, res) => {
     const { id } = req.params;
+    if (!isNonEmptyId(id)) {
+      logUpdateIssue('application', 'Invalid ID', { id });
+      res.status(400).json({ error: 'Invalid ID' });
+      return;
+    }
+
     const nextName = sanitizeText(req.body?.name);
     if (!nextName) {
       res.status(400).json({ error: 'Application name is required' });
@@ -437,22 +474,35 @@ app.prepare().then(() => {
     const db = readDb();
     const application = db.applications.find((entry) => entry.id === id);
     if (!application) {
+      logUpdateIssue('application', 'Application not found', { id });
       res.status(404).json({ error: 'Application not found' });
       return;
     }
 
     application.name = nextName;
     writeDb(db);
-    res.json(application);
-  });
+    sendUpdateSuccess(res, application);
+  };
 
-  server.put('/api/field/:id', authRequired, requireRole('admin'), (req, res) => {
+  server.put('/api/application/:id', authRequired, requireRole('admin'), updateApplicationHandler);
+  server.patch('/api/application/:id', authRequired, requireRole('admin'), updateApplicationHandler);
+  server.put('/api/applications/:id', authRequired, requireRole('admin'), updateApplicationHandler);
+  server.patch('/api/applications/:id', authRequired, requireRole('admin'), updateApplicationHandler);
+
+  const updateFieldHandler = (req, res) => {
     const { id } = req.params;
     const allowedTypes = ['text', 'pdf', 'image'];
+    if (!isNonEmptyId(id)) {
+      logUpdateIssue('field', 'Invalid ID', { id });
+      res.status(400).json({ error: 'Invalid ID' });
+      return;
+    }
+
     const db = readDb();
     const field = db.fields.find((entry) => entry.id === id);
 
     if (!field) {
+      logUpdateIssue('field', 'Field not found', { id });
       res.status(404).json({ error: 'Field not found' });
       return;
     }
@@ -489,14 +539,26 @@ app.prepare().then(() => {
     }
 
     writeDb(db);
-    res.json(field);
-  });
+    sendUpdateSuccess(res, field);
+  };
 
-  server.put('/api/data/:id', authRequired, requireRole('admin'), (req, res) => {
+  server.put('/api/field/:id', authRequired, requireRole('admin'), updateFieldHandler);
+  server.patch('/api/field/:id', authRequired, requireRole('admin'), updateFieldHandler);
+  server.put('/api/fields/:id', authRequired, requireRole('admin'), updateFieldHandler);
+  server.patch('/api/fields/:id', authRequired, requireRole('admin'), updateFieldHandler);
+
+  const updateRecordDataHandler = (req, res) => {
     const { id } = req.params;
+    if (!isNonEmptyId(id)) {
+      logUpdateIssue('record', 'Invalid ID', { id });
+      res.status(400).json({ error: 'Invalid ID' });
+      return;
+    }
+
     const db = readDb();
     const record = db.records.find((entry) => entry.id === id);
     if (!record) {
+      logUpdateIssue('record', 'Record not found', { id });
       res.status(404).json({ error: 'Record not found' });
       return;
     }
@@ -504,6 +566,7 @@ app.prepare().then(() => {
     const applicationFields = db.fields.filter((field) => field.applicationId === record.applicationId);
     const patchValues = req.body?.values;
     if (!patchValues || typeof patchValues !== 'object') {
+      logUpdateIssue('record', 'Invalid values payload', { id, body: req.body });
       res.status(400).json({ error: 'values object is required' });
       return;
     }
@@ -530,15 +593,27 @@ app.prepare().then(() => {
     });
 
     writeDb(db);
-    res.json(record);
-  });
+    sendUpdateSuccess(res, record);
+  };
 
-  server.put('/api/user/:id', authRequired, requireRole('admin'), (req, res) => {
+  server.put('/api/data/:id', authRequired, requireRole('admin'), updateRecordDataHandler);
+  server.patch('/api/data/:id', authRequired, requireRole('admin'), updateRecordDataHandler);
+  server.put('/api/records/:id', authRequired, requireRole('admin'), updateRecordDataHandler);
+  server.patch('/api/records/:id', authRequired, requireRole('admin'), updateRecordDataHandler);
+
+  const updateUserHandler = (req, res) => {
     const { id } = req.params;
+    if (!isNonEmptyId(id)) {
+      logUpdateIssue('user', 'Invalid ID', { id });
+      res.status(400).json({ error: 'Invalid ID' });
+      return;
+    }
+
     const db = readDb();
     const user = db.users.find((entry) => entry.id === id);
 
     if (!user) {
+      logUpdateIssue('user', 'User not found', { id });
       res.status(404).json({ error: 'User not found' });
       return;
     }
@@ -567,8 +642,13 @@ app.prepare().then(() => {
     }
 
     writeDb(db);
-    res.json({ id: user.id, username: user.username, role: user.role });
-  });
+    sendUpdateSuccess(res, { id: user.id, username: user.username, role: user.role });
+  };
+
+  server.put('/api/user/:id', authRequired, requireRole('admin'), updateUserHandler);
+  server.patch('/api/user/:id', authRequired, requireRole('admin'), updateUserHandler);
+  server.put('/api/users/:id', authRequired, requireRole('admin'), updateUserHandler);
+  server.patch('/api/users/:id', authRequired, requireRole('admin'), updateUserHandler);
 
   server.delete('/api/company/:id', authRequired, requireRole('admin'), requireDeleteConfirmation, (req, res) => {
     const { id } = req.params;

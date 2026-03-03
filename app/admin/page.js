@@ -8,8 +8,8 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Modal } from '../../components/ui/modal';
 import { DataTable } from '../../components/ui/table';
-import { LinkDisplay } from '../../components/ui/link-display';
 import { AdminSidebar } from '../../components/AdminSidebar';
+import { GroupedFieldsView } from '../../components/GroupedFieldsView';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -22,6 +22,9 @@ export default function AdminPage() {
   const [selectedApp, setSelectedApp] = useState('');
   const [selectedFieldCompany, setSelectedFieldCompany] = useState('');
   const [selectedFieldApp, setSelectedFieldApp] = useState('');
+  const [selectedCompanyApplication, setSelectedCompanyApplication] = useState('');
+  const [companyApplications, setCompanyApplications] = useState([]);
+  const [isFetchingCompanyApplications, setIsFetchingCompanyApplications] = useState(false);
   const [recordTextValues, setRecordTextValues] = useState({});
   const [recordFiles, setRecordFiles] = useState({});
   const [companyFieldPayload, setCompanyFieldPayload] = useState(null);
@@ -339,8 +342,32 @@ export default function AdminPage() {
     }
   };
 
-  const fetchCompanyFields = async (companyId) => {
+  const fetchCompanyApplications = async (companyId) => {
     if (!companyId) {
+      setCompanyApplications([]);
+      return;
+    }
+
+    setIsFetchingCompanyApplications(true);
+    try {
+      const response = await fetch(`/api/company/${companyId}/applications`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setCompanyApplications([]);
+        setStatusMessage(payload.error || 'Unable to load company applications.');
+        return;
+      }
+      setCompanyApplications(payload.applications || []);
+    } catch {
+      setCompanyApplications([]);
+      setStatusMessage('Unable to load company applications. Please retry.');
+    } finally {
+      setIsFetchingCompanyApplications(false);
+    }
+  };
+
+  const fetchCompanyFields = async (companyId, applicationId) => {
+    if (!companyId || !applicationId) {
       setCompanyFieldPayload(null);
       setRecordTextValues({});
       setRecordFiles({});
@@ -350,7 +377,7 @@ export default function AdminPage() {
     setIsFetchingCompanyFields(true);
     setStatusMessage('');
     try {
-      const response = await fetch(`/api/company/${companyId}/fields`);
+      const response = await fetch(`/api/company/${companyId}/fields?applicationId=${applicationId}`);
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         setCompanyFieldPayload(null);
@@ -386,8 +413,8 @@ export default function AdminPage() {
   };
 
   const updateCompanyInformation = async () => {
-    if (!selectedCompany || !companyFieldPayload?.applications?.length) {
-      setStatusMessage('Please choose a company with at least one application.');
+    if (!selectedCompany || !selectedCompanyApplication || !companyFieldPayload?.applications?.length) {
+      setStatusMessage('Please choose a company and application first.');
       return;
     }
 
@@ -426,7 +453,7 @@ export default function AdminPage() {
 
       await Promise.all(updates);
       setStatusMessage('Company information updated successfully.');
-      await fetchCompanyFields(selectedCompany);
+      await fetchCompanyFields(selectedCompany, selectedCompanyApplication);
       await refresh();
     } catch (error) {
       setStatusMessage(error?.message || 'Company information update failed.');
@@ -798,31 +825,50 @@ export default function AdminPage() {
 
         {active === 'home' || active === 'upload' ? <div className="grid-2 section-gap"><Card className="stack">
           <h2>Company Information</h2>
-          <select className="select" value={selectedCompany} onChange={(event) => {
-            const companyId = event.target.value;
-            setSelectedCompany(companyId);
-            fetchCompanyFields(companyId);
-          }}>
-            <option value="">Select company</option>
-            {data.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
-          </select>
+          <div className="row">
+            <select className="select" value={selectedCompany} onChange={(event) => {
+              const companyId = event.target.value;
+              setSelectedCompany(companyId);
+              setSelectedCompanyApplication('');
+              setCompanyFieldPayload(null);
+              setRecordTextValues({});
+              setRecordFiles({});
+              setStatusMessage('');
+              fetchCompanyApplications(companyId);
+            }}>
+              <option value="">Select company</option>
+              {data.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+            </select>
+            <select className="select" value={selectedCompanyApplication} disabled={!selectedCompany || isFetchingCompanyApplications || !companyApplications.length} onChange={(event) => {
+              const applicationId = event.target.value;
+              setSelectedCompanyApplication(applicationId);
+              fetchCompanyFields(selectedCompany, applicationId);
+            }}>
+              <option value="">Select application</option>
+              {companyApplications.map((application) => <option key={application.id} value={application.id}>{application.name}</option>)}
+            </select>
+          </div>
 
+          {isFetchingCompanyApplications ? <p className="subtitle">Loading applications...</p> : null}
+          {selectedCompany && !isFetchingCompanyApplications && !companyApplications.length ? <p className="subtitle">No applications found for this company.</p> : null}
+          {selectedCompany && companyApplications.length > 0 && !selectedCompanyApplication ? <p className="subtitle">Select an application to view company information.</p> : null}
           {isFetchingCompanyFields ? <p className="subtitle">Loading company information...</p> : null}
-          {selectedCompany && !isFetchingCompanyFields && !companyFieldPayload?.applications?.length ? <p className="subtitle">No applications found for this company.</p> : null}
-          {selectedCompanyInfo && !isFetchingCompanyFields && companyFieldPayload && !companyFieldPayload.hasData ? <p className="subtitle">No saved information exists for {selectedCompanyInfo.name} yet.</p> : null}
+          {selectedCompanyInfo && selectedCompanyApplication && !isFetchingCompanyFields && companyFieldPayload && !companyFieldPayload.hasData ? <p className="subtitle">No saved information exists for {selectedCompanyInfo.name} yet.</p> : null}
 
           {companyFieldPayload?.applications?.map((application) => (
             <div key={application.applicationId} className="stack">
-              <Badge>{application.applicationName}</Badge>
+              <div>
+                <Badge>{application.applicationName}</Badge>
+                <p className="subtitle">Created: {application.recordCreatedAt ? new Date(application.recordCreatedAt).toISOString().slice(0, 10) : '—'}</p>
+                <p className="subtitle">Last modified: {application.recordUpdatedAt ? new Date(application.recordUpdatedAt).toISOString().slice(0, 10) : '—'}</p>
+              </div>
+              <GroupedFieldsView groupedFields={application.groupedFields || []} />
               {(application.fields || []).map((field) => {
                 const existingValue = application.values?.[field.id];
                 if (field.type === 'text' || field.type === 'link') {
                   return (
                     <div key={field.id}>
                       <strong>{field.name}</strong>
-                      {field.type === 'link' && existingValue ? (
-                        <LinkDisplay value={existingValue} />
-                      ) : null}
                       <Input
                         type={field.type === 'link' ? 'url' : 'text'}
                         placeholder={field.type === 'link' ? 'https://example.com' : ''}
@@ -836,7 +882,6 @@ export default function AdminPage() {
                 return (
                   <div key={field.id} className="stack">
                     <strong>{field.name}</strong>
-                    {field.type === 'image' && existingValue?.url ? <a href={existingValue.url} target="_blank" rel="noopener noreferrer"><img src={existingValue.url} alt={existingValue.originalname || field.name} style={{ maxWidth: '220px', borderRadius: '8px' }} /></a> : null}
                     {existingValue?.url ? <a href={existingValue.url} target="_blank" rel="noopener noreferrer">Current file: {existingValue.originalname || existingValue.filename || 'Open file'}</a> : <p className="subtitle">No file uploaded yet.</p>}
                     <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles((current) => ({ ...current, [field.id]: event.target.files?.[0] }))} />
                   </div>
@@ -845,7 +890,7 @@ export default function AdminPage() {
             </div>
           ))}
 
-          <Button onClick={updateCompanyInformation} disabled={!selectedCompany || isFetchingCompanyFields}>Update Information</Button>
+          <Button onClick={updateCompanyInformation} disabled={!selectedCompany || !selectedCompanyApplication || isFetchingCompanyFields}>Update Information</Button>
         </Card></div> : null}
 
         {active === 'users' ? <div className="grid-2 section-gap">

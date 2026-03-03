@@ -1051,7 +1051,7 @@ app.prepare().then(() => {
     res.status(200).json(upsertedRecord);
   });
 
-  server.get('/api/company/:id/fields', authRequired, requireRole('admin'), (req, res) => {
+  server.get('/api/company/:id/applications', authRequired, requireRole('admin'), (req, res) => {
     const { id } = req.params;
     const db = readDb();
     const company = db.companies.find((entry) => entry.id === id);
@@ -1061,7 +1061,46 @@ app.prepare().then(() => {
       return;
     }
 
-    const companyApplications = db.applications.filter((application) => application.companyId === id);
+    const applications = db.applications
+      .filter((application) => application.companyId === id)
+      .map((application) => ({ id: application.id, name: application.name }));
+
+    res.json({
+      companyId: company.id,
+      companyName: company.name,
+      applications
+    });
+  });
+
+  server.get('/api/company/:id/fields', authRequired, requireRole('admin'), (req, res) => {
+    const { id } = req.params;
+    const applicationId = sanitizeText(req.query.applicationId);
+    const db = readDb();
+    const company = db.companies.find((entry) => entry.id === id);
+
+    if (!company) {
+      res.status(404).json({ error: 'Company not found' });
+      return;
+    }
+
+    if (!applicationId) {
+      res.json({
+        companyId: company.id,
+        companyName: company.name,
+        applications: [],
+        hasData: false
+      });
+      return;
+    }
+
+    const selectedApplication = db.applications.find((application) => application.id === applicationId && application.companyId === id);
+
+    if (!selectedApplication) {
+      res.status(404).json({ error: 'Application not found for selected company' });
+      return;
+    }
+
+    const companyApplications = [selectedApplication];
     const applicationsPayload = companyApplications.map((application) => {
       const applicationTags = tagsForApplication(db, application);
       const applicationFields = fieldsForApplication(db, application)
@@ -1076,13 +1115,37 @@ app.prepare().then(() => {
       const latestRecord = db.records
         .filter((record) => record.applicationId === application.id)
         .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0))[0];
+      const normalizedFields = normalizeRecordFields(applicationFields, applicationTags, latestRecord?.values || {});
+      const fieldGroupsByTagId = normalizedFields.reduce((accumulator, field) => {
+        if (!field.tagId) return accumulator;
+        if (!accumulator[field.tagId]) {
+          accumulator[field.tagId] = [];
+        }
+        accumulator[field.tagId].push(field);
+        return accumulator;
+      }, {});
+      const groupedFields = applicationTags
+        .map((tag) => ({
+          id: tag.id,
+          name: tag.name,
+          scope: resolveTagScope(tag),
+          scopeType: toScopeType(resolveTagScope(tag)),
+          scopeLabel: scopeDisplayLabel(resolveTagScope(tag)),
+          company_id: tag.companyId ?? null,
+          fields: fieldGroupsByTagId[tag.id] || []
+        }))
+        .filter((tagGroup) => tagGroup.fields.length > 0)
+        .sort((a, b) => scopePriority(a.scope) - scopePriority(b.scope) || a.name.localeCompare(b.name));
 
       return {
         applicationId: application.id,
         applicationName: application.name,
         fields: applicationFields,
+        groupedFields,
         values: latestRecord?.values || {},
-        recordId: latestRecord?.id || null
+        recordId: latestRecord?.id || null,
+        recordCreatedAt: latestRecord?.createdAt || null,
+        recordUpdatedAt: latestRecord?.updatedAt || null
       };
     });
 

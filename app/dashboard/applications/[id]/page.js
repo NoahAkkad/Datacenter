@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Card } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
-import { Modal } from '../../../../components/ui/modal';
-import { LinkDisplay } from '../../../../components/ui/link-display';
+import { GroupedFieldsView } from '../../../../components/GroupedFieldsView';
 
 
 function formatDate(value) {
@@ -27,7 +26,6 @@ export default function ApplicationDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [application, setApplication] = useState(null);
   const [error, setError] = useState('');
-  const [imagePreview, setImagePreview] = useState('');
 
   useEffect(() => {
     const loadApplication = async () => {
@@ -90,43 +88,7 @@ export default function ApplicationDetailsPage() {
         <Card><p className="error">{error}</p></Card>
       ) : null}
 
-      {!application?.groupedFields || application.groupedFields.length === 0 ? (
-        <Card><p className="subtitle">No records available.</p></Card>
-      ) : (
-        <div className="stack section-mini-gap">
-          {application.groupedFields.map((tagGroup) => (
-            <Card key={tagGroup.id}>
-              <div className="stack section-mini-gap">
-                <h3>{tagGroup.name} <span className="subtitle">({tagGroup.scopeLabel})</span></h3>
-                {tagGroup.fields.map((field) => (
-                  <div key={`${tagGroup.id}-${field.label}-${field.type}`} className="field-row">
-                    <strong>{field.label}</strong>
-                    {field.type === 'text' ? (
-                      <span>{field.value}</span>
-                    ) : field.type === 'image' ? (
-                      field.fileUrl ? (
-                        <button type="button" className="button secondary" onClick={() => setImagePreview(field.fileUrl)} style={{ padding: '4px', lineHeight: 0 }}>
-                          <img src={field.fileUrl} alt={`${field.label} preview`} style={{ width: '70px', height: '70px', objectFit: 'cover', borderRadius: '6px' }} />
-                        </button>
-                      ) : <span>—</span>
-                    ) : field.type === 'pdf' ? (
-                      field.fileUrl ? <a className="link" href={field.fileUrl} target="_blank" rel="noopener noreferrer">Open PDF</a> : <span>—</span>
-                    ) : field.type === 'link' ? (
-                      <LinkDisplay value={field.value} />
-                    ) : (
-                      <span>—</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <Modal open={Boolean(imagePreview)} onClose={() => setImagePreview('')} title="Image Preview">
-        {imagePreview ? <img src={imagePreview} alt="Application image" className="preview-image" /> : null}
-      </Modal>
+      <GroupedFieldsView groupedFields={application?.groupedFields || []} />
     </main>
   );
 }

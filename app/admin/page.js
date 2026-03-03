@@ -13,6 +13,8 @@ import { GroupedFieldsView } from '../../components/GroupedFieldsView';
 import { formatDateOnly } from '../../lib/formatDate';
 import { useAuth } from '../../components/AuthProvider';
 import { HeaderMenu } from '../../components/HeaderMenu';
+import { Toast } from '../../components/ui/toast';
+import { Skeleton } from '../../components/ui/skeleton';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -777,6 +779,14 @@ export default function AdminPage() {
     }
   };
 
+  const statusTone = useMemo(() => {
+    if (!statusMessage) return 'info';
+    const normalized = statusMessage.toLowerCase();
+    if (normalized.includes('fail') || normalized.includes('error') || normalized.includes('unable')) return 'error';
+    if (normalized.includes('success')) return 'success';
+    return 'info';
+  }, [statusMessage]);
+
   const filteredCompanies = data.filter((company) => company.name.toLowerCase().includes(search.toLowerCase()));
 
 
@@ -799,7 +809,10 @@ export default function AdminPage() {
   if (authLoading) {
     return (
       <main className="page-center">
-        <Card>Validating session...</Card>
+        <Card className="stack">
+          <Skeleton style={{ height: 24, width: '45%' }} />
+          <Skeleton style={{ height: 44, width: '100%' }} />
+        </Card>
       </main>
     );
   }
@@ -822,7 +835,7 @@ export default function AdminPage() {
           <HeaderMenu onLogout={onLogout} loggingOut={isLoggingOut} />
         </header>
 
-        {statusMessage ? <p className="error">{statusMessage}</p> : null}
+        <Toast message={statusMessage} type={statusTone} onClose={() => setStatusMessage('')} />
 
         <Card className="control-bar-card">
           <div className="admin-controls">

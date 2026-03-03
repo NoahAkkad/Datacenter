@@ -135,14 +135,6 @@ export default function AdminPage() {
     [data, selectedCompany]
   );
 
-  const existingFieldNamesByApplication = useMemo(
-    () => applications.reduce((accumulator, application) => ({
-      ...accumulator,
-      [application.id]: new Set((application.fields || []).map((field) => String(field.name || '').trim().toLowerCase()))
-    }), {}),
-    [applications]
-  );
-
   const fieldCompanyApplications = useMemo(
     () => applications.filter((application) => !selectedFieldCompany || application.companyId === selectedFieldCompany),
     [applications, selectedFieldCompany]
@@ -252,16 +244,6 @@ export default function AdminPage() {
     const payload = isBulkCreate
       ? { ...fieldForm, applicationIds: applications.map((application) => application.id) }
       : fieldForm;
-
-    const normalizedName = fieldForm.name.trim().toLowerCase();
-    const duplicateExists = isBulkCreate
-      ? applications.some((application) => existingFieldNamesByApplication[application.id]?.has(normalizedName))
-      : existingFieldNamesByApplication[selectedFieldApp]?.has(normalizedName);
-
-    if (duplicateExists) {
-      setStatusMessage('Field name already exists in the selected application.');
-      return;
-    }
 
     setStatusMessage('');
     try {

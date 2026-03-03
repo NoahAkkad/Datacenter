@@ -725,15 +725,27 @@ app.prepare().then(() => {
   server.get('/api/applications', authRequired, requireRole('user'), (req, res) => {
     const search = String(req.query.search || '').toLowerCase();
     const db = readDb();
+    const account = db.users.find((entry) => entry.id === req.user.id);
+    const allowedCompanyIds = Array.from(new Set([...(account?.allowedCompanyIds || []), ...(account?.companyIds || [])].map((value) => sanitizeText(value)).filter(Boolean)));
+    const allowedApplicationIds = Array.from(new Set([...(account?.allowedApplicationIds || []), ...(account?.applicationIds || [])].map((value) => sanitizeText(value)).filter(Boolean)));
 
     const applications = db.applications
       .filter((appEntry) => appEntry.name.toLowerCase().includes(search))
-      .map((appEntry) => ({
-        id: appEntry.id,
-        name: appEntry.name,
-        createdAt: appEntry.createdAt,
-        updatedAt: appEntry.updatedAt
-      }));
+      .filter((appEntry) => {
+        if (!allowedCompanyIds.length && !allowedApplicationIds.length) return true;
+        return allowedApplicationIds.includes(appEntry.id) || allowedCompanyIds.includes(appEntry.companyId);
+      })
+      .map((appEntry) => {
+        const company = db.companies.find((entry) => entry.id === appEntry.companyId);
+        return {
+          id: appEntry.id,
+          name: appEntry.name,
+          description: appEntry.description || appEntry.shortDescription || '',
+          companyName: company?.name || '',
+          createdAt: appEntry.createdAt,
+          updatedAt: appEntry.updatedAt
+        };
+      });
 
     res.json({ applications });
   });
@@ -741,11 +753,22 @@ app.prepare().then(() => {
   server.get('/api/applications/:id', authRequired, requireRole('user'), (req, res) => {
     const { id } = req.params;
     const db = readDb();
+    const account = db.users.find((entry) => entry.id === req.user.id);
+    const allowedCompanyIds = Array.from(new Set([...(account?.allowedCompanyIds || []), ...(account?.companyIds || [])].map((value) => sanitizeText(value)).filter(Boolean)));
+    const allowedApplicationIds = Array.from(new Set([...(account?.allowedApplicationIds || []), ...(account?.applicationIds || [])].map((value) => sanitizeText(value)).filter(Boolean)));
     const application = db.applications.find((entry) => entry.id === id);
 
     if (!application) {
       res.status(404).json({ error: 'Application not found' });
       return;
+    }
+
+    if (allowedCompanyIds.length || allowedApplicationIds.length) {
+      const isAllowed = allowedApplicationIds.includes(application.id) || allowedCompanyIds.includes(application.companyId);
+      if (!isAllowed) {
+        res.status(404).json({ error: 'Application not found' });
+        return;
+      }
     }
 
     const fields = fieldsForApplication(db, application);

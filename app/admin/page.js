@@ -16,6 +16,7 @@ import { HeaderMenu } from '../../components/HeaderMenu';
 import { Toast } from '../../components/ui/toast';
 import { Skeleton } from '../../components/ui/skeleton';
 import { CopyIcon, PencilIcon, Trash2Icon } from '../../components/ui/icons';
+import { FIELD_PRESETS, FIELD_PRESET_OPTIONS } from '../../lib/fieldPresetLibrary';
 
 function ActionIconButton({ label, color = 'blue', className = '', children, ...props }) {
   return (
@@ -64,6 +65,7 @@ export default function AdminPage() {
   const [duplicateCompanyName, setDuplicateCompanyName] = useState('');
   const [appName, setAppName] = useState('');
   const [fieldForm, setFieldForm] = useState({ name: '', type: 'text', tagId: '' });
+  const [fieldPresetKey, setFieldPresetKey] = useState('Manual');
   const [userForm, setUserForm] = useState({ username: '', email: '', password: '' });
   const [tagForm, setTagForm] = useState({ scope: 'application', companyId: '', applicationId: '', name: '', description: '', presetKey: '' });
   const [tagPresetOptions, setTagPresetOptions] = useState([]);
@@ -74,6 +76,7 @@ export default function AdminPage() {
   const [duplicatingCompany, setDuplicatingCompany] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState('');
   const [globalTagConfirmOpen, setGlobalTagConfirmOpen] = useState(false);
+  const [editingFieldPresetKey, setEditingFieldPresetKey] = useState('Manual');
 
   const parseApiJsonResponse = async (response) => {
     const contentType = response.headers.get('content-type') || '';
@@ -421,6 +424,7 @@ export default function AdminPage() {
       setFieldModal(false);
       setSelectedFieldApp('');
       setFieldForm({ name: '', type: 'text', tagId: '' });
+      setFieldPresetKey('Manual');
       setStatusMessage(isBulkCreate ? 'Field successfully added to all applications' : 'Field successfully added');
       refresh();
     } catch {
@@ -615,7 +619,10 @@ export default function AdminPage() {
   const openEdit = (type, row) => {
     if (type === 'company') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Company' });
     if (type === 'application') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Application' });
-    if (type === 'field') setEditing({ open: true, type, id: row.id, payload: { name: row.name, type: row.type || 'text', tagId: row.tagId || '' }, title: 'Edit Field' });
+    if (type === 'field') {
+      setEditingFieldPresetKey(FIELD_PRESETS[row.name] ? row.name : 'Manual');
+      setEditing({ open: true, type, id: row.id, payload: { name: row.name, type: row.type || 'text', tagId: row.tagId || '' }, title: 'Edit Field' });
+    }
     if (type === 'tag') setEditing({ open: true, type, id: row.id, payload: { name: row.name, description: row.description || '', scope: row.scope || (row.allApplications ? 'company' : 'application'), companyId: row.companyId || '', applicationId: row.applicationId || '' }, title: 'Edit Tag' });
     if (type === 'data') setEditing({ open: true, type, id: row.id, payload: { values: row.values || {} }, title: `Edit Record ${row.id}` });
     if (type === 'user') setEditing({ open: true, type, id: row.id, payload: { username: row.username, email: row.email || '', password: '' }, title: 'Edit User' });
@@ -629,6 +636,43 @@ export default function AdminPage() {
       name: selectedPreset?.name || current.name,
       description: selectedPreset?.description || (selectedPreset ? '' : current.description)
     }));
+  };
+
+
+  const handleFieldPresetChange = (presetKey) => {
+    setFieldPresetKey(presetKey);
+    if (presetKey === 'Manual') return;
+
+    const selectedPreset = FIELD_PRESETS[presetKey];
+    if (!selectedPreset) return;
+
+    setFieldForm((current) => ({
+      ...current,
+      name: presetKey,
+      type: selectedPreset.type
+    }));
+  };
+
+  const handleEditFieldPresetChange = (presetKey) => {
+    setEditingFieldPresetKey(presetKey);
+    if (presetKey === 'Manual') return;
+
+    const selectedPreset = FIELD_PRESETS[presetKey];
+    if (!selectedPreset) return;
+
+    setEditing((current) => ({
+      ...current,
+      payload: {
+        ...current.payload,
+        name: presetKey,
+        type: selectedPreset.type
+      }
+    }));
+  };
+
+  const closeEditingModal = () => {
+    setEditing({ open: false, type: '', id: '', payload: {}, title: '' });
+    setEditingFieldPresetKey('Manual');
   };
 
   const applyOptimisticEdit = (type, id, updatedEntity) => {
@@ -737,7 +781,7 @@ export default function AdminPage() {
       }
 
       applyOptimisticEdit(type, id, responsePayload.data || {});
-      setEditing({ open: false, type: '', id: '', payload: {}, title: '' });
+      closeEditingModal();
       setStatusMessage(responsePayload.message || 'Update completed successfully.');
       await refresh();
     } catch (error) {
@@ -898,7 +942,7 @@ export default function AdminPage() {
             <div className="action-buttons-wrap">
               <Button onClick={() => setCompanyModal(true)}>New Company</Button>
               <Button variant="secondary" onClick={() => setAppModal(true)}>New Application</Button>
-              <Button variant="secondary" onClick={() => setFieldModal(true)}>New Field</Button>
+              <Button variant="secondary" onClick={() => { setFieldPresetKey('Manual'); setFieldForm({ name: '', type: 'text', tagId: '' }); setFieldModal(true); }}>New Field</Button>
               <Button variant="secondary" onClick={() => setTagModal(true)}>New Tag</Button>
               <Button variant="secondary" onClick={() => setUserModal(true)}>New User</Button>
             </div>
@@ -1177,7 +1221,7 @@ export default function AdminPage() {
         <Button onClick={createApp} disabled={!selectedCompany || !appName.trim()}>Create</Button>
       </Modal>
 
-      <Modal open={fieldModal} onClose={() => setFieldModal(false)} title="Create Dynamic Field">
+      <Modal open={fieldModal} onClose={() => { setFieldModal(false); setFieldPresetKey('Manual'); }} title="Create Dynamic Field">
         <select className="select" value={selectedFieldCompany} onChange={(event) => {
           setSelectedFieldCompany(event.target.value);
           setSelectedFieldApp('');
@@ -1193,6 +1237,10 @@ export default function AdminPage() {
         }} disabled={!selectedFieldCompany}>
           <option value="">Select application</option>
           {fieldCompanyApplications.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}
+        </select>
+        <label className="subtitle" htmlFor="field-preset-select">Use Field Preset (Optional)</label>
+        <select id="field-preset-select" className="select" value={fieldPresetKey} onChange={(event) => handleFieldPresetChange(event.target.value)}>
+          {FIELD_PRESET_OPTIONS.map((presetOption) => <option key={presetOption} value={presetOption}>{presetOption}</option>)}
         </select>
         <Input placeholder="Field name" value={fieldForm.name} onChange={(event) => setFieldForm({ ...fieldForm, name: event.target.value })} />
         <select className="select" value={fieldForm.type} onChange={(event) => setFieldForm({ ...fieldForm, type: event.target.value })}>
@@ -1265,10 +1313,14 @@ export default function AdminPage() {
         <Button onClick={createUser} disabled={!userForm.username || !userForm.password}>Create User</Button>
       </Modal>
 
-      <Modal open={editing.open} onClose={() => !savingEdit && setEditing({ open: false, type: '', id: '', payload: {}, title: '' })} title={editing.title}>
+      <Modal open={editing.open} onClose={() => !savingEdit && closeEditingModal()} title={editing.title}>
         {editing.type === 'company' || editing.type === 'application' ? <Input value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} /> : null}
         {editing.type === 'field' ? (
           <>
+            <label className="subtitle" htmlFor="edit-field-preset-select">Use Field Preset (Optional)</label>
+            <select id="edit-field-preset-select" className="select" value={editingFieldPresetKey} onChange={(event) => handleEditFieldPresetChange(event.target.value)}>
+              {FIELD_PRESET_OPTIONS.map((presetOption) => <option key={`edit-${presetOption}`} value={presetOption}>{presetOption}</option>)}
+            </select>
             <Input placeholder="Field name" value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} />
             <select className="select" value={editing.payload.type || 'text'} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, type: event.target.value } }))}>
               <option value="text">Text</option>
@@ -1314,7 +1366,7 @@ export default function AdminPage() {
           );
         }) : null}
         <div className="row">
-          <Button variant="secondary" onClick={() => setEditing({ open: false, type: '', id: '', payload: {}, title: '' })} disabled={savingEdit}>Cancel</Button>
+          <Button variant="secondary" onClick={closeEditingModal} disabled={savingEdit}>Cancel</Button>
           <Button onClick={executeEdit} disabled={savingEdit}>{savingEdit ? 'Saving...' : 'Save changes'}</Button>
         </div>
       </Modal>

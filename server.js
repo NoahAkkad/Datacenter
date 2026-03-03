@@ -898,23 +898,6 @@ app.prepare().then(() => {
     const fieldsToCreate = [];
 
     for (const targetApplicationId of targetApplicationIds) {
-      const duplicate = db.fields.find((field) => {
-        const sameName = normalizeFieldName(field.name) === normalizeFieldName(nextName);
-        if (!sameName) return false;
-        if (field.applicationId === targetApplicationId) return true;
-        const targetApplication = appById.get(targetApplicationId);
-        return (field.allApplications === true && field.companyId === targetApplication?.companyId)
-          || field.scope === TAG_SCOPES.GLOBAL;
-      });
-      if (duplicate) {
-        duplicateEntries.push({
-          applicationId: targetApplicationId,
-          fieldId: duplicate.id,
-          fieldName: duplicate.name
-        });
-        continue;
-      }
-
       const application = appById.get(targetApplicationId);
       let selectedTag = null;
 
@@ -928,9 +911,23 @@ app.prepare().then(() => {
       }
 
       const tagScope = resolveTagScope(selectedTag);
+      const scopedApplicationId = tagScope === TAG_SCOPES.APPLICATION ? targetApplicationId : null;
+      const duplicate = db.fields.find((field) => field.applicationId === scopedApplicationId
+        && field.tagId === selectedTag.id
+        && normalizeFieldName(field.name) === normalizeFieldName(nextName));
+      if (duplicate) {
+        duplicateEntries.push({
+          applicationId: scopedApplicationId,
+          tagId: selectedTag.id,
+          fieldId: duplicate.id,
+          fieldName: duplicate.name
+        });
+        continue;
+      }
+
       fieldsToCreate.push({
         id: nextId('fld'),
-        applicationId: tagScope === TAG_SCOPES.APPLICATION ? targetApplicationId : null,
+        applicationId: scopedApplicationId,
         companyId: tagScope === TAG_SCOPES.GLOBAL ? null : application.companyId,
         allApplications: tagScope === TAG_SCOPES.COMPANY,
         scope: tagScope,
@@ -946,7 +943,7 @@ app.prepare().then(() => {
 
     if (duplicateEntries.length > 0) {
       res.status(409).json({
-        error: 'Field name already exists for one or more applications',
+        error: 'A field with this name already exists inside this tag.',
         duplicates: duplicateEntries
       });
       return;
@@ -1319,14 +1316,6 @@ app.prepare().then(() => {
         return;
       }
 
-      const duplicateName = db.fields.find((entry) => entry.applicationId === field.applicationId
-        && entry.id !== field.id
-        && normalizeFieldName(entry.name) === normalizeFieldName(nextName));
-      if (duplicateName) {
-        res.status(409).json({ error: 'Field name already exists in this application' });
-        return;
-      }
-
       field.name = nextName;
     }
 
@@ -1384,6 +1373,17 @@ app.prepare().then(() => {
           field.applicationId = null;
           field.companyId = null;
         }
+      }
+    }
+
+    if (req.body?.name !== undefined || req.body?.tagId !== undefined) {
+      const duplicateName = db.fields.find((entry) => entry.id !== field.id
+        && entry.applicationId === field.applicationId
+        && entry.tagId === field.tagId
+        && normalizeFieldName(entry.name) === normalizeFieldName(field.name));
+      if (duplicateName) {
+        res.status(409).json({ error: 'A field with this name already exists inside this tag.' });
+        return;
       }
     }
 

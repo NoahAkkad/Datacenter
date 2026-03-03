@@ -90,6 +90,32 @@ const TAG_SCOPES = {
   GLOBAL: 'global'
 };
 
+const TAG_SCOPE_TYPES = {
+  COMPANY: 'company',
+  GLOBAL_COMPANY: 'global_company',
+  GLOBAL_SYSTEM: 'global_system'
+};
+
+function toScopeType(scope) {
+  if (scope === TAG_SCOPES.COMPANY) return TAG_SCOPE_TYPES.GLOBAL_COMPANY;
+  if (scope === TAG_SCOPES.GLOBAL) return TAG_SCOPE_TYPES.GLOBAL_SYSTEM;
+  return TAG_SCOPE_TYPES.COMPANY;
+}
+
+function scopePriority(scope) {
+  const scopeType = toScopeType(scope);
+  if (scopeType === TAG_SCOPE_TYPES.COMPANY) return 0;
+  if (scopeType === TAG_SCOPE_TYPES.GLOBAL_COMPANY) return 1;
+  return 2;
+}
+
+function scopeDisplayLabel(scope) {
+  const scopeType = toScopeType(scope);
+  if (scopeType === TAG_SCOPE_TYPES.GLOBAL_COMPANY) return 'Company Global';
+  if (scopeType === TAG_SCOPE_TYPES.GLOBAL_SYSTEM) return 'System Global';
+  return 'Company';
+}
+
 function normalizeTagScope(scope) {
   const value = sanitizeText(scope).toLowerCase();
   if (Object.values(TAG_SCOPES).includes(value)) {
@@ -126,9 +152,11 @@ function isTagVisibleForApplication(tag, application) {
 function normalizeTagEntity(tag, now = new Date().toISOString()) {
   const scopedTag = { ...ensureTimestamps(tag, now) };
   scopedTag.scope = resolveTagScope(scopedTag);
+  scopedTag.scopeType = toScopeType(scopedTag.scope);
 
   if (scopedTag.scope === TAG_SCOPES.GLOBAL) {
     scopedTag.companyId = null;
+    scopedTag.company_id = null;
     scopedTag.applicationId = null;
     scopedTag.allApplications = false;
     return scopedTag;
@@ -137,10 +165,12 @@ function normalizeTagEntity(tag, now = new Date().toISOString()) {
   if (scopedTag.scope === TAG_SCOPES.COMPANY) {
     scopedTag.applicationId = null;
     scopedTag.allApplications = true;
+    scopedTag.company_id = scopedTag.companyId;
     return scopedTag;
   }
 
   scopedTag.allApplications = false;
+  scopedTag.company_id = scopedTag.companyId;
   return scopedTag;
 }
 
@@ -225,6 +255,7 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
       const rawValue = recordValues[field.id];
       const matchedTag = tagById.get(field.tagId) || null;
       const tagLabel = matchedTag?.name || field.tagName || 'Uncategorized';
+      const scope = resolveTagScope(matchedTag || {});
 
       if (field.type === 'text') {
         return {
@@ -232,12 +263,23 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
           type: 'text',
           value: rawValue === undefined || rawValue === null ? '—' : String(rawValue),
           tagId: matchedTag?.id || null,
-          tagName: tagLabel
+          tagName: tagLabel,
+          tagScope: scope,
+          tagScopeType: toScopeType(scope)
         };
       }
 
       if (!rawValue || !rawValue.url) {
-        return { label: field.name, type: field.type, fileUrl: '', tagId: matchedTag?.id || null, tagName: tagLabel, empty: true };
+        return {
+          label: field.name,
+          type: field.type,
+          fileUrl: '',
+          tagId: matchedTag?.id || null,
+          tagName: tagLabel,
+          tagScope: scope,
+          tagScopeType: toScopeType(scope),
+          empty: true
+        };
       }
 
       return {
@@ -245,10 +287,12 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
         type: field.type,
         fileUrl: rawValue.url,
         tagId: matchedTag?.id || null,
-        tagName: tagLabel
+        tagName: tagLabel,
+        tagScope: scope,
+        tagScopeType: toScopeType(scope)
       };
     })
-    .filter(Boolean);
+    .filter((field) => Boolean(field.tagId));
 }
 
 function tagsForApplication(db, application) {
@@ -323,33 +367,43 @@ app.prepare().then(() => {
       db.tags = [];
     }
     db.tags = db.tags.map((tag) => normalizeTagEntity(tag, now));
-    db.fields = (db.fields || []).map((field) => {
-      const normalizedField = {
-        ...field,
-        allApplications: field.allApplications === true,
-        scope: normalizeTagScope(field.scope) || (field.allApplications === true ? TAG_SCOPES.COMPANY : TAG_SCOPES.APPLICATION)
-      };
+    db.fields = (db.fields || [])
+      .map((field) => {
+        const normalizedField = {
+          ...field,
+          allApplications: field.allApplications === true,
+          scope: normalizeTagScope(field.scope) || (field.allApplications === true ? TAG_SCOPES.COMPANY : TAG_SCOPES.APPLICATION)
+        };
 
-      if (normalizedField.tagId) {
-        const matchedTag = db.tags.find((tag) => tag.id === normalizedField.tagId);
-        if (matchedTag) {
-          normalizedField.tagName = matchedTag.name;
-          return normalizedField;
+        if (normalizedField.tagId) {
+          const matchedTag = db.tags.find((tag) => tag.id === normalizedField.tagId);
+          if (matchedTag) {
+            normalizedField.tagName = matchedTag.name;
+            normalizedField.scope = resolveTagScope(matchedTag);
+            normalizedField.scopeType = toScopeType(normalizedField.scope);
+            return normalizedField;
+          }
         }
-      }
 
-      const fallbackApplication = db.applications.find((entry) => entry.id === normalizedField.applicationId)
-        || db.applications.find((entry) => entry.companyId === normalizedField.companyId);
-      const fallbackTag = fallbackApplication ? ensureDefaultTag(db, fallbackApplication) : null;
-      normalizedField.tagId = fallbackTag?.id || null;
-      normalizedField.tagName = fallbackTag?.name || 'Uncategorized';
-      normalizedField.scope = TAG_SCOPES.APPLICATION;
-      normalizedField.allApplications = false;
-      normalizedField.applicationId = fallbackApplication?.id || normalizedField.applicationId || null;
-      normalizedField.companyId = fallbackApplication?.companyId || normalizedField.companyId || null;
+        const fallbackApplication = db.applications.find((entry) => entry.id === normalizedField.applicationId)
+          || db.applications.find((entry) => entry.companyId === normalizedField.companyId);
 
-      return normalizedField;
-    });
+        if (!fallbackApplication) {
+          return null;
+        }
+
+        const fallbackTag = ensureDefaultTag(db, fallbackApplication);
+        normalizedField.tagId = fallbackTag.id;
+        normalizedField.tagName = fallbackTag.name;
+        normalizedField.scope = TAG_SCOPES.APPLICATION;
+        normalizedField.scopeType = toScopeType(TAG_SCOPES.APPLICATION);
+        normalizedField.allApplications = false;
+        normalizedField.applicationId = fallbackApplication.id;
+        normalizedField.companyId = fallbackApplication.companyId;
+
+        return normalizedField;
+      })
+      .filter(Boolean);
 
     return db;
   });
@@ -460,14 +514,27 @@ app.prepare().then(() => {
       fields: normalizedFields
     }];
 
-    const groupedFields = normalizedFields.reduce((accumulator, field) => {
-      const groupName = field.tagName || 'Uncategorized';
-      if (!accumulator[groupName]) {
-        accumulator[groupName] = [];
+    const fieldGroupsByTagId = normalizedFields.reduce((accumulator, field) => {
+      if (!field.tagId) return accumulator;
+      if (!accumulator[field.tagId]) {
+        accumulator[field.tagId] = [];
       }
-      accumulator[groupName].push(field);
+      accumulator[field.tagId].push(field);
       return accumulator;
-    }, {}) || {};
+    }, {});
+
+    const groupedFields = tags
+      .map((tag) => ({
+        id: tag.id,
+        name: tag.name,
+        scope: resolveTagScope(tag),
+        scopeType: toScopeType(resolveTagScope(tag)),
+        scopeLabel: scopeDisplayLabel(resolveTagScope(tag)),
+        company_id: tag.companyId ?? null,
+        fields: fieldGroupsByTagId[tag.id] || []
+      }))
+      .filter((tagGroup) => tagGroup.fields.length > 0)
+      .sort((a, b) => scopePriority(a.scope) - scopePriority(b.scope) || a.name.localeCompare(b.name));
 
     res.json({
       id: application.id,
@@ -541,7 +608,19 @@ app.prepare().then(() => {
       return;
     }
 
-    const tags = tagsForApplication(db, application);
+    const tags = tagsForApplication(db, application)
+      .map((tag) => {
+        const scope = resolveTagScope(tag);
+        return {
+          ...tag,
+          scope,
+          scope_type: toScopeType(scope),
+          company_id: tag.companyId ?? null,
+          displayLabel: `${tag.name} (${scopeDisplayLabel(scope)})`
+        };
+      })
+      .sort((a, b) => scopePriority(a.scope) - scopePriority(b.scope) || a.name.localeCompare(b.name));
+
     res.json({ tags });
   });
 
@@ -610,8 +689,10 @@ app.prepare().then(() => {
       name: nextName,
       description: nextDescription,
       scope: requestedScope,
+      scope_type: toScopeType(requestedScope),
       applicationId: requestedScope === TAG_SCOPES.APPLICATION ? application.id : null,
       companyId: requestedScope === TAG_SCOPES.COMPANY ? companyId : (requestedScope === TAG_SCOPES.APPLICATION ? application.companyId : null),
+      company_id: requestedScope === TAG_SCOPES.GLOBAL ? null : (requestedScope === TAG_SCOPES.COMPANY ? companyId : application.companyId),
       allApplications: requestedScope === TAG_SCOPES.COMPANY,
       createdAt: now,
       updatedAt: now
@@ -750,7 +831,7 @@ app.prepare().then(() => {
 
   server.post('/api/applications/:applicationId/fields', authRequired, requireRole('admin'), (req, res) => {
     const { applicationId } = req.params;
-    const { name, type, applicationIds = [], tagId, tagName } = req.body;
+    const { name, type, applicationIds = [], tagId } = req.body;
     const allowedTypes = ['text', 'pdf', 'image'];
     const nextName = sanitizeText(name);
 
@@ -810,12 +891,6 @@ app.prepare().then(() => {
         selectedTag = db.tags.find((entry) => entry.id === sanitizeText(tagId)
           && isTagVisibleForApplication(entry, application));
       }
-
-      if (!selectedTag && tagName) {
-        selectedTag = db.tags.find((entry) => isTagVisibleForApplication(entry, application)
-          && normalizeTagName(entry.name) === normalizeTagName(tagName));
-      }
-
       if (!selectedTag) {
         res.status(400).json({ error: 'A valid tag selection is required for field creation' });
         return;
@@ -828,9 +903,11 @@ app.prepare().then(() => {
         companyId: tagScope === TAG_SCOPES.GLOBAL ? null : application.companyId,
         allApplications: tagScope === TAG_SCOPES.COMPANY,
         scope: tagScope,
+        scope_type: toScopeType(tagScope),
         name: nextName,
         type,
         tagId: selectedTag.id,
+        tag_id: selectedTag.id,
         tagName: selectedTag.name,
         createdAt
       });
@@ -1176,8 +1253,10 @@ app.prepare().then(() => {
         }
         const tagScope = resolveTagScope(matchedTag);
         field.tagId = matchedTag.id;
+        field.tag_id = matchedTag.id;
         field.tagName = matchedTag.name;
         field.scope = tagScope;
+        field.scope_type = toScopeType(tagScope);
         field.allApplications = tagScope === TAG_SCOPES.COMPANY;
         if (tagScope === TAG_SCOPES.APPLICATION) {
           field.applicationId = fieldApplication?.id || field.applicationId;

@@ -19,6 +19,7 @@ export default function AdminPage() {
   const [search, setSearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedApp, setSelectedApp] = useState('');
+  const [selectedFieldCompany, setSelectedFieldCompany] = useState('');
   const [selectedFieldApp, setSelectedFieldApp] = useState('');
   const [recordTextValues, setRecordTextValues] = useState({});
   const [recordFiles, setRecordFiles] = useState({});
@@ -138,16 +139,32 @@ export default function AdminPage() {
     [applications]
   );
 
+  const fieldCompanyApplications = useMemo(
+    () => applications.filter((application) => !selectedFieldCompany || application.companyId === selectedFieldCompany),
+    [applications, selectedFieldCompany]
+  );
+
   const selectedFieldApplication = useMemo(
-    () => applications.find((application) => application.id === selectedFieldApp),
-    [applications, selectedFieldApp]
+    () => fieldCompanyApplications.find((application) => application.id === selectedFieldApp),
+    [fieldCompanyApplications, selectedFieldApp]
   );
 
   const availableTags = useMemo(
-    () => (selectedFieldApplication?.tags || []).map((tag) => ({
-      ...tag,
-      scope: tag.scope || (tag.allApplications ? 'company' : 'application')
-    })),
+    () => (selectedFieldApplication?.tags || [])
+      .map((tag) => {
+        const scope = tag.scope || (tag.allApplications ? 'company' : 'application');
+        const scopeLabel = scope === 'company' ? 'Company Global' : scope === 'global' ? 'System Global' : 'Company';
+        return {
+          ...tag,
+          scope,
+          scopeLabel,
+          labeledName: `${tag.name} (${scopeLabel})`
+        };
+      })
+      .sort((a, b) => {
+        const priority = { application: 0, company: 1, global: 2 };
+        return (priority[a.scope] ?? 99) - (priority[b.scope] ?? 99) || a.name.localeCompare(b.name);
+      }),
     [selectedFieldApplication]
   );
 
@@ -156,6 +173,16 @@ export default function AdminPage() {
     company: availableTags.filter((tag) => tag.scope === 'company'),
     global: availableTags.filter((tag) => tag.scope === 'global')
   }), [availableTags]);
+
+
+  useEffect(() => {
+    if (!selectedFieldCompany) return;
+    const isAppInCompany = applications.some((application) => application.id === selectedFieldApp && application.companyId === selectedFieldCompany);
+    if (!isAppInCompany) {
+      setSelectedFieldApp('');
+      setFieldForm((current) => ({ ...current, tagId: '' }));
+    }
+  }, [applications, selectedFieldApp, selectedFieldCompany]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -855,13 +882,21 @@ export default function AdminPage() {
       </Modal>
 
       <Modal open={fieldModal} onClose={() => setFieldModal(false)} title="Create Dynamic Field">
+        <select className="select" value={selectedFieldCompany} onChange={(event) => {
+          setSelectedFieldCompany(event.target.value);
+          setSelectedFieldApp('');
+          setFieldForm((current) => ({ ...current, tagId: '' }));
+        }}>
+          <option value="">Select company</option>
+          {data.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+        </select>
         <select className="select" value={selectedFieldApp} onChange={(event) => {
           const nextApplicationId = event.target.value;
           setSelectedFieldApp(nextApplicationId);
           setFieldForm((current) => ({ ...current, tagId: '' }));
-        }}>
+        }} disabled={!selectedFieldCompany}>
           <option value="">Select application</option>
-          {applications.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}
+          {fieldCompanyApplications.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}
         </select>
         <Input placeholder="Field name" value={fieldForm.name} onChange={(event) => setFieldForm({ ...fieldForm, name: event.target.value })} />
         <select className="select" value={fieldForm.type} onChange={(event) => setFieldForm({ ...fieldForm, type: event.target.value })}>
@@ -869,18 +904,21 @@ export default function AdminPage() {
           <option value="pdf">PDF</option>
           <option value="image">Image</option>
         </select>
-        {selectedFieldApp ? <select className="select" value={fieldForm.tagId} onChange={(event) => setFieldForm({ ...fieldForm, tagId: event.target.value })}>
-          <option value="">Select tag (required)</option>
-          <optgroup label="Application tags">
-            {groupedAvailableTags.application.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
-          </optgroup>
-          <optgroup label="Company tags (All Applications in this company)">
-            {groupedAvailableTags.company.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
-          </optgroup>
-          <optgroup label="System-wide global tags (All Applications in all companies)">
-            {groupedAvailableTags.global.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
-          </optgroup>
-        </select> : null}
+        {selectedFieldApp ? <>
+          <select className="select" value={fieldForm.tagId} onChange={(event) => setFieldForm({ ...fieldForm, tagId: event.target.value })} disabled={availableTags.length === 0}>
+            <option value="">Select tag (required)</option>
+            <optgroup label="Company-level tags">
+              {groupedAvailableTags.application.map((tag) => <option key={tag.id} value={tag.id}>{tag.labeledName}</option>)}
+            </optgroup>
+            <optgroup label="Company-wide global tags (All Applications in this company)">
+              {groupedAvailableTags.company.map((tag) => <option key={tag.id} value={tag.id}>{tag.labeledName}</option>)}
+            </optgroup>
+            <optgroup label="System-wide global tags (All Applications in all companies)">
+              {groupedAvailableTags.global.map((tag) => <option key={tag.id} value={tag.id}>{tag.labeledName}</option>)}
+            </optgroup>
+          </select>
+          {availableTags.length === 0 ? <p className="subtitle">No tags available. Please create a tag first.</p> : null}
+        </> : null}
         <Button onClick={createField} disabled={!selectedFieldApp || !fieldForm.name.trim() || !fieldForm.tagId}>Create</Button>
       </Modal>
 

@@ -1,21 +1,24 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Card } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
-import { Modal } from '../../components/ui/modal';
-import { UserSidebar } from '../../components/UserSidebar';
+import { useParams, useRouter } from 'next/navigation';
+import { Card } from '../../../../components/ui/card';
+import { Button } from '../../../../components/ui/button';
+import { Modal } from '../../../../components/ui/modal';
+import { UserSidebar } from '../../../../components/UserSidebar';
+import { GroupedFieldsView } from '../../../../components/GroupedFieldsView';
 
-export default function DashboardPage() {
+export default function ApplicationDetailsPage() {
   const router = useRouter();
+  const params = useParams();
+  const applicationId = params?.id;
+
   const [collapsed, setCollapsed] = useState(false);
   const [active, setActive] = useState('home');
   const [checkingSession, setCheckingSession] = useState(true);
-  const [loadingApplications, setLoadingApplications] = useState(false);
-  const [applications, setApplications] = useState([]);
-  const [applicationsError, setApplicationsError] = useState('');
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
+  const [applicationDetails, setApplicationDetails] = useState(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [currentUserProfile, setCurrentUserProfile] = useState(null);
@@ -42,31 +45,30 @@ export default function DashboardPage() {
   }, [router]);
 
   useEffect(() => {
-    if (checkingSession) return;
+    if (checkingSession || !applicationId) return;
 
-    const loadApplications = async () => {
-      setLoadingApplications(true);
-      setApplicationsError('');
+    const loadApplicationDetails = async () => {
+      setLoadingDetails(true);
+      setDetailsError('');
 
       try {
-        const response = await fetch('/api/applications', { cache: 'no-store' });
-
+        const response = await fetch(`/api/applications/${applicationId}`, { cache: 'no-store' });
         if (!response.ok) {
-          throw new Error('Failed to load applications');
+          throw new Error(response.status === 404 ? 'Application not found.' : 'Failed to load application details.');
         }
 
         const payload = await response.json();
-        setApplications(Array.isArray(payload.applications) ? payload.applications : []);
+        setApplicationDetails(payload);
       } catch (error) {
-        setApplications([]);
-        setApplicationsError(error instanceof Error ? error.message : 'Unable to load applications');
+        setApplicationDetails(null);
+        setDetailsError(error instanceof Error ? error.message : 'Unable to load application details');
       } finally {
-        setLoadingApplications(false);
+        setLoadingDetails(false);
       }
     };
 
-    loadApplications();
-  }, [checkingSession]);
+    loadApplicationDetails();
+  }, [applicationId, checkingSession]);
 
   const onLogout = async () => {
     setIsLoggingOut(true);
@@ -117,8 +119,8 @@ export default function DashboardPage() {
       <section className="main">
         <header className="dashboard-header">
           <div>
-            <h1 className="title">User Dashboard</h1>
-            <p className="subtitle">Browse applications and open details.</p>
+            <h1 className="title">{applicationDetails?.name || 'Application Details'}</h1>
+            <p className="subtitle">{applicationDetails?.companyName || 'Structured application information'}</p>
           </div>
           <div className="profile">
             <button className="profile-trigger" onClick={() => setLogoutConfirmOpen(true)}>
@@ -128,35 +130,18 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {applicationsError ? <Card className="error">{applicationsError}</Card> : null}
+        <div className="row section-mini-gap">
+          <Button variant="secondary" onClick={() => router.push('/dashboard')}>← Back to applications</Button>
+        </div>
 
-        {loadingApplications ? (
-          <Card>Loading applications...</Card>
+        {detailsError ? <Card className="error section-gap">{detailsError}</Card> : null}
+
+        {loadingDetails ? (
+          <Card className="section-gap">Loading application details...</Card>
         ) : (
-          <section className="app-list-stack">
-            <h2 className="section-title">Applications</h2>
-            {applications.length ? (
-              <div className="application-grid">
-                {applications.map((application) => (
-                  <Link
-                    key={application.id}
-                    href={`/dashboard/application/${application.id}`}
-                    className="application-card-link"
-                  >
-                    <Card className="application-card stack">
-                      <h3 className="application-card-title">{application.name}</h3>
-                      {application.companyName ? <p className="application-card-company">{application.companyName}</p> : null}
-                      {application.description ? <p className="subtitle">{application.description}</p> : null}
-                    </Card>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <Card>
-                <p className="subtitle">No applications are currently available.</p>
-              </Card>
-            )}
-          </section>
+          <div className="section-gap">
+            <GroupedFieldsView groupedFields={applicationDetails?.groupedFields || []} />
+          </div>
         )}
       </section>
 

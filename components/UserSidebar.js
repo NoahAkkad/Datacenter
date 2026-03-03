@@ -17,7 +17,7 @@ export function UserSidebar({ collapsed, onToggle, activeTab, onNavigate }) {
       <Button variant="secondary" className="sidebar-toggle" onClick={onToggle}>{collapsed ? '→' : '←'}</Button>
       <div className="stack sidebar-nav">
         {userMenu.map((item) => {
-          const isActive = pathname === '/dashboard' && activeTab === item.key;
+          const isActive = pathname === item.href || pathname.startsWith('/dashboard/application/');
 
           return (
             <Link

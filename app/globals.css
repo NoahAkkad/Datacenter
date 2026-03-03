@@ -64,6 +64,15 @@ th { background: #f8fafc; font-size: 12px; text-transform: uppercase; color: #64
 .modal-card { width: 100%; max-width: 520px; }
 
 .dashboard-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+
+.app-list-stack{display:flex;flex-direction:column;gap:12px;}
+.section-title{margin:0;font-size:20px;color:#111827;}
+.application-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;}
+.application-card-link{display:block;}
+.application-card{height:100%;min-height:170px;justify-content:flex-start;transition:all .2s ease;}
+.application-card:hover{transform:translateY(-2px);box-shadow:0 12px 24px -20px rgba(17,24,39,.35);border-color:#c7d2fe;}
+.application-card-title{margin:0;font-size:18px;color:#111827;}
+.application-card-company{margin:0;font-size:14px;color:#374151;font-weight:600;}
 .app-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
 .record { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; margin-top: 10px; }
 .field-row { display: grid; grid-template-columns: 150px 1fr; gap: 10px; margin-bottom: 8px; font-size: 14px; }
@@ -78,11 +87,11 @@ th { background: #f8fafc; font-size: 12px; text-transform: uppercase; color: #64
 
 @media (max-width: 1024px) {
   .admin-shell { grid-template-columns: 88px 1fr; }
-  .grid-2,.app-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .grid-2,.app-grid,.application-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 
 @media (max-width: 900px) {
-  .grid-2,.app-grid { grid-template-columns: 1fr; }
+  .grid-2,.app-grid,.application-grid { grid-template-columns: 1fr; }
   .search-input-wrap { flex: 1 1 300px; max-width: 100%; }
   .action-buttons-wrap { flex: 1 1 100%; justify-content: flex-start; }
 }

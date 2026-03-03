@@ -937,27 +937,46 @@ export default function AdminPage() {
                 ) : null}
               </div>
               <GroupedFieldsView groupedFields={application.groupedFields || []} />
-              {(application.fields || []).map((field) => {
-                const existingValue = application.values?.[field.id];
-                if (field.type === 'text' || field.type === 'link' || field.type === 'number') {
-                  return (
-                    <div key={field.id}>
-                      <strong>{field.name}</strong>
-                      <Input
-                        type={field.type === 'link' ? 'url' : field.type === 'number' ? 'number' : 'text'}
-                        placeholder={field.type === 'link' ? 'https://example.com' : ''}
-                        value={recordTextValues[field.id] || ''}
-                        onChange={(event) => setRecordTextValues((current) => ({ ...current, [field.id]: event.target.value }))}
-                      />
-                    </div>
-                  );
+              {(application.groupedFields || []).map((tagGroup) => {
+                const fieldsForTag = (application.fields || []).filter((field) => field.tagId === tagGroup.id);
+                if (!fieldsForTag.length) {
+                  return null;
                 }
 
                 return (
-                  <div key={field.id} className="stack">
-                    <strong>{field.name}</strong>
-                    {existingValue?.url ? <a href={existingValue.url} target="_blank" rel="noopener noreferrer">Current file: {existingValue.originalname || existingValue.filename || 'Open file'}</a> : <p className="subtitle">No file uploaded yet.</p>}
-                    <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles((current) => ({ ...current, [field.id]: event.target.files?.[0] }))} />
+                  <div key={`${application.applicationId}-${tagGroup.id}`} className="tag-section stack">
+                    <div>
+                      <div className="tag-title-wrap">
+                        <h3 className="tag-title">{tagGroup.name}</h3>
+                        <span className="tag-scope">{tagGroup.scopeLabel}</span>
+                      </div>
+                      <div className="company-edit-tag-divider" />
+                    </div>
+
+                    {fieldsForTag.map((field) => {
+                      const existingValue = application.values?.[field.id];
+                      if (field.type === 'text' || field.type === 'link' || field.type === 'number') {
+                        return (
+                          <div key={field.id}>
+                            <strong>{field.name}</strong>
+                            <Input
+                              type={field.type === 'link' ? 'url' : field.type === 'number' ? 'number' : 'text'}
+                              placeholder={field.type === 'link' ? 'https://example.com' : ''}
+                              value={recordTextValues[field.id] || ''}
+                              onChange={(event) => setRecordTextValues((current) => ({ ...current, [field.id]: event.target.value }))}
+                            />
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={field.id} className="stack">
+                          <strong>{field.name}</strong>
+                          {existingValue?.url ? <a href={existingValue.url} target="_blank" rel="noopener noreferrer">Current file: {existingValue.originalname || existingValue.filename || 'Open file'}</a> : <p className="subtitle">No file uploaded yet.</p>}
+                          <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles((current) => ({ ...current, [field.id]: event.target.files?.[0] }))} />
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}

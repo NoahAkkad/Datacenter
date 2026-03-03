@@ -5,8 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Button } from './ui/button';
 
 const userMenu = [
-  { key: 'home', label: 'Home', href: '/dashboard' },
-  { key: 'applications', label: 'Applications', href: '/dashboard?tab=applications' }
+  { key: 'home', label: 'Home', href: '/dashboard' }
 ];
 
 export function UserSidebar({ collapsed, onToggle, activeTab, onNavigate }) {

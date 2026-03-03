@@ -55,7 +55,6 @@ th { background: #f8fafc; font-size: 12px; text-transform: uppercase; color: #64
 .modal { position: fixed; inset: 0; background: rgba(2,6,23,.5); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .modal-card { width: 100%; max-width: 520px; }
 
-.user-wrap { max-width: 1280px; margin: 0 auto; padding: 24px; }
 .dashboard-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
 .app-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
 .record { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; margin-top: 10px; }
@@ -97,13 +96,7 @@ th { background: #f8fafc; font-size: 12px; text-transform: uppercase; color: #64
 
 .preview-image{max-width:100%;border-radius:12px;}
 
-.details-header-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 20px; }
-.details-meta-row { display: flex; gap: 14px; flex-wrap: wrap; }
 
-.application-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:16px;}
-.application-card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:6px;transition:all .2s ease;min-height:120px;justify-content:center;}
-.application-card:hover{transform:translateY(-2px);box-shadow:0 12px 24px -20px rgba(17,24,39,.55);border-color:#d1d5db;}
-.application-card-title{margin:0;font-size:19px;color:#111827;}
 
 .tag-card{padding:20px;}
 .tag-title-wrap{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:14px;}
@@ -124,12 +117,12 @@ th { background: #f8fafc; font-size: 12px; text-transform: uppercase; color: #64
 
 @media (max-width: 900px){
   .dashboard-header{flex-direction:column;align-items:flex-start;}
-  .application-card-grid,.field-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .field-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 
 @media (max-width: 760px){
-  .application-card-grid,.field-card-grid{grid-template-columns:1fr;}
-  .main,.user-wrap{padding:16px;}
+  .field-card-grid{grid-template-columns:1fr;}
+  .main{padding:16px;}
 }
 
 .tag-section{border:1px solid #e2e8f0;border-radius:12px;padding:10px;background:#f8fafc;}

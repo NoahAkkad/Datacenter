@@ -7,45 +7,37 @@ import { Button } from '../../../../components/ui/button';
 import { Modal } from '../../../../components/ui/modal';
 import { UserSidebar } from '../../../../components/UserSidebar';
 import { GroupedFieldsView } from '../../../../components/GroupedFieldsView';
+import { useAuth } from '../../../../components/AuthProvider';
 
 export default function ApplicationDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const applicationId = params?.id;
+  const { user, loading: authLoading, clearUser } = useAuth();
 
   const [collapsed, setCollapsed] = useState(false);
   const [active, setActive] = useState('home');
-  const [checkingSession, setCheckingSession] = useState(true);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState('');
   const [applicationDetails, setApplicationDetails] = useState(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [currentUserProfile, setCurrentUserProfile] = useState(null);
 
   useEffect(() => {
-    const validateSession = async () => {
-      const response = await fetch('/api/auth/me', { cache: 'no-store' });
-      if (!response.ok) {
-        router.replace('/login?portal=user');
-        return;
-      }
+    if (authLoading) return;
 
-      const user = await response.json();
-      if (user.role === 'admin') {
-        router.replace('/admin');
-        return;
-      }
+    if (!user) {
+      router.replace('/login?portal=user');
+      return;
+    }
 
-      setCurrentUserProfile(user);
-      setCheckingSession(false);
-    };
-
-    validateSession();
-  }, [router]);
+    if (user.role === 'admin') {
+      router.replace('/admin');
+    }
+  }, [authLoading, router, user]);
 
   useEffect(() => {
-    if (checkingSession || !applicationId) return;
+    if (authLoading || !user || user.role === 'admin' || !applicationId) return;
 
     const loadApplicationDetails = async () => {
       setLoadingDetails(true);
@@ -68,7 +60,7 @@ export default function ApplicationDetailsPage() {
     };
 
     loadApplicationDetails();
-  }, [applicationId, checkingSession]);
+  }, [applicationId, authLoading, user]);
 
   const onLogout = async () => {
     setIsLoggingOut(true);
@@ -77,7 +69,7 @@ export default function ApplicationDetailsPage() {
     } finally {
       window.localStorage.removeItem('authToken');
       window.sessionStorage.removeItem('authToken');
-      setCurrentUserProfile(null);
+      clearUser();
       setIsLoggingOut(false);
       setLogoutConfirmOpen(false);
       router.replace('/login?portal=user');
@@ -96,10 +88,10 @@ export default function ApplicationDetailsPage() {
       .join(' ');
   };
 
-  const displayName = formatDisplayName(currentUserProfile?.username);
-  const displayEmail = currentUserProfile?.email || 'No email available';
+  const displayName = formatDisplayName(user?.username);
+  const displayEmail = user?.email?.trim() || 'Email unavailable';
 
-  if (checkingSession) {
+  if (authLoading) {
     return (
       <main className="page-center">
         <Card>Validating session...</Card>

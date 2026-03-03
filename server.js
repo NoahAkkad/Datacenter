@@ -593,9 +593,15 @@ app.prepare().then(() => {
         username: 'admin',
         passwordHash: hashPassword('admin123'),
         role: 'admin',
+        email: 'admin@novacode.se',
         createdAt: new Date().toISOString()
       });
     }
+
+    db.users = (db.users || []).map((user) => ({
+      ...user,
+      email: sanitizeText(user.email) || `${sanitizeText(user.username) || 'user'}@novacode.local`
+    }));
 
     const now = new Date().toISOString();
     db.companies = db.companies.map((company) => ensureTimestamps(company, now));
@@ -659,13 +665,13 @@ app.prepare().then(() => {
       return;
     }
 
-    const token = signToken({ id: user.id, username: user.username, role: user.role });
+    const token = signToken({ id: user.id, username: user.username, role: user.role, email: user.email || '' });
     res.cookie('auth', token, {
       ...authCookieOptions,
       maxAge: 8 * 60 * 60 * 1000
     });
 
-    res.json({ id: user.id, username: user.username, role: user.role });
+    res.json({ id: user.id, username: user.username, role: user.role, email: user.email || '' });
   });
 
   const logoutHandler = (req, res) => {
@@ -822,6 +828,11 @@ app.prepare().then(() => {
       return;
     }
 
+    db.users = (db.users || []).map((user) => ({
+      ...user,
+      email: sanitizeText(user.email) || `${sanitizeText(user.username) || 'user'}@novacode.local`
+    }));
+
     const now = new Date().toISOString();
     const company = { id: nextId('cmp'), name, createdAt: now, updatedAt: now };
     withDb((db) => {
@@ -862,6 +873,11 @@ app.prepare().then(() => {
       res.status(404).json({ error: 'Company not found' });
       return;
     }
+
+    db.users = (db.users || []).map((user) => ({
+      ...user,
+      email: sanitizeText(user.email) || `${sanitizeText(user.username) || 'user'}@novacode.local`
+    }));
 
     const now = new Date().toISOString();
     const application = { id: nextId('app'), companyId, name, createdAt: now, updatedAt: now };
@@ -973,6 +989,11 @@ app.prepare().then(() => {
       res.status(409).json({ error: 'Tag name already exists in this scope' });
       return;
     }
+
+    db.users = (db.users || []).map((user) => ({
+      ...user,
+      email: sanitizeText(user.email) || `${sanitizeText(user.username) || 'user'}@novacode.local`
+    }));
 
     const now = new Date().toISOString();
     const tag = {
@@ -1313,6 +1334,11 @@ app.prepare().then(() => {
         }
       });
 
+    db.users = (db.users || []).map((user) => ({
+      ...user,
+      email: sanitizeText(user.email) || `${sanitizeText(user.username) || 'user'}@novacode.local`
+    }));
+
     const now = new Date().toISOString();
     let upsertedRecord;
 
@@ -1453,7 +1479,7 @@ app.prepare().then(() => {
   });
 
   server.post('/api/users', authRequired, requireRole('admin'), (req, res) => {
-    const { username, password, role = 'user' } = req.body;
+    const { username, password, email = '', role = 'user' } = req.body;
     if (!username || !password) {
       res.status(400).json({ error: 'Username and password required' });
       return;
@@ -1470,9 +1496,12 @@ app.prepare().then(() => {
       return;
     }
 
+    const sanitizedEmail = sanitizeText(email);
+
     const user = {
       id: nextId('usr'),
       username,
+      email: sanitizedEmail || `${sanitizeText(username) || 'user'}@novacode.local`,
       passwordHash: hashPassword(password),
       role,
       createdAt: new Date().toISOString()
@@ -1483,7 +1512,7 @@ app.prepare().then(() => {
       return current;
     });
 
-    res.status(201).json({ id: user.id, username: user.username, role: user.role });
+    res.status(201).json({ id: user.id, username: user.username, role: user.role, email: user.email });
   });
 
   server.get('/api/users', authRequired, requireRole('admin'), (req, res) => {
@@ -1492,6 +1521,7 @@ app.prepare().then(() => {
       id: user.id,
       username: user.username,
       role: user.role,
+      email: user.email || '',
       createdAt: user.createdAt
     })));
   });
@@ -1817,6 +1847,11 @@ app.prepare().then(() => {
       user.username = nextUsername;
     }
 
+    if (req.body?.email !== undefined) {
+      const nextEmail = sanitizeText(req.body.email);
+      user.email = nextEmail || `${sanitizeText(user.username) || 'user'}@novacode.local`;
+    }
+
     if (req.body?.password !== undefined) {
       const password = String(req.body.password || '');
       if (password.length < 6) {
@@ -1828,7 +1863,7 @@ app.prepare().then(() => {
 
     writeDb(db);
     logUpdateSuccess('user', id, { username: user.username, passwordUpdated: req.body?.password !== undefined }, req.user);
-    sendUpdateSuccess(res, { id: user.id, username: user.username, role: user.role });
+    sendUpdateSuccess(res, { id: user.id, username: user.username, role: user.role, email: user.email || '' });
   };
 
   server.put('/api/user/:id', authRequired, requireRole('admin'), updateUserHandler);

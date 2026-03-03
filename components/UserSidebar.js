@@ -5,8 +5,8 @@ import { usePathname } from 'next/navigation';
 import { Button } from './ui/button';
 
 const userMenu = [
-  { key: 'home', label: '🏠 Home', href: '/dashboard' },
-  { key: 'applications', label: '🧩 Applications', href: '/dashboard?tab=applications' }
+  { key: 'home', label: 'Home', href: '/dashboard' },
+  { key: 'applications', label: 'Applications', href: '/dashboard?tab=applications' }
 ];
 
 export function UserSidebar({ collapsed, onToggle, activeTab, onNavigate }) {
@@ -14,7 +14,8 @@ export function UserSidebar({ collapsed, onToggle, activeTab, onNavigate }) {
 
   return (
     <aside className={`sidebar ${collapsed ? 'compact' : ''}`}>
-      <Button variant="secondary" onClick={onToggle}>{collapsed ? '➡️' : '⬅️'}</Button>
+      <div className="sidebar-brand">{collapsed ? 'DC' : 'Datacenter'}</div>
+      <Button variant="secondary" className="sidebar-toggle" onClick={onToggle}>{collapsed ? '→' : '←'}</Button>
       <div className="stack sidebar-nav">
         {userMenu.map((item) => {
           const isActive = pathname === '/dashboard' && activeTab === item.key;

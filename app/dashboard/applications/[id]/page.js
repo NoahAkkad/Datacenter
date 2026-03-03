@@ -7,6 +7,13 @@ import { Card } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
 import { Modal } from '../../../../components/ui/modal';
 
+
+function formatLinkHref(value) {
+  const linkValue = String(value || '').trim();
+  if (!linkValue) return '';
+  return /^https?:\/\//i.test(linkValue) ? linkValue : `https://${linkValue}`;
+}
+
 function formatDate(value) {
   if (!value) return '—';
 
@@ -101,10 +108,18 @@ export default function ApplicationDetailsPage() {
                     <strong>{field.label}</strong>
                     {field.type === 'text' ? (
                       <span>{field.value}</span>
+                    ) : field.type === 'image' ? (
+                      field.fileUrl ? (
+                        <button type="button" className="button secondary" onClick={() => setImagePreview(field.fileUrl)} style={{ padding: '4px', lineHeight: 0 }}>
+                          <img src={field.fileUrl} alt={`${field.label} preview`} style={{ width: '70px', height: '70px', objectFit: 'cover', borderRadius: '6px' }} />
+                        </button>
+                      ) : <span>—</span>
                     ) : field.type === 'pdf' ? (
-                      field.fileUrl ? <a className="link" href={field.fileUrl} target="_blank" rel="noreferrer">Open PDF</a> : <span>—</span>
+                      field.fileUrl ? <a className="link" href={field.fileUrl} target="_blank" rel="noopener noreferrer">Open PDF</a> : <span>—</span>
+                    ) : field.type === 'link' ? (
+                      field.value ? <a className="link" href={formatLinkHref(field.value)} target="_blank" rel="noopener noreferrer">Open Link</a> : <span>—</span>
                     ) : (
-                      field.fileUrl ? <button className="button secondary" onClick={() => setImagePreview(field.fileUrl)}>Preview Image</button> : <span>—</span>
+                      <span>—</span>
                     )}
                   </div>
                 ))}

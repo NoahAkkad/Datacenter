@@ -144,9 +144,18 @@ export default function AdminPage() {
   );
 
   const availableTags = useMemo(
-    () => (selectedFieldApplication?.tags || []),
+    () => (selectedFieldApplication?.tags || []).map((tag) => ({
+      ...tag,
+      scope: tag.scope || (tag.allApplications ? 'company' : 'application')
+    })),
     [selectedFieldApplication]
   );
+
+  const groupedAvailableTags = useMemo(() => ({
+    application: availableTags.filter((tag) => tag.scope === 'application'),
+    company: availableTags.filter((tag) => tag.scope === 'company'),
+    global: availableTags.filter((tag) => tag.scope === 'global')
+  }), [availableTags]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -204,6 +213,11 @@ export default function AdminPage() {
   const createField = async () => {
     const isBulkCreate = selectedFieldApp === '__all__';
     const endpoint = isBulkCreate ? '/api/applications/all/fields' : `/api/applications/${selectedFieldApp}/fields`;
+
+    if (!fieldForm.tagId) {
+      setStatusMessage('Selecting a tag is required to create a field.');
+      return;
+    }
     const payload = isBulkCreate
       ? { ...fieldForm, applicationIds: applications.map((application) => application.id) }
       : fieldForm;
@@ -707,7 +721,7 @@ export default function AdminPage() {
             <h2>Dynamic Fields Management</h2>
             {fields.map((field) => (
               <div className="row" key={field.id}>
-                <Badge>{field.name} · {field.type} · {field.tagName || 'General'} · {field.appName}</Badge>
+                <Badge>{field.name} · {field.type} · {field.tagName || 'Uncategorized'} · {field.appName}</Badge>
                 <div className="row"><Button variant="secondary" onClick={() => openEdit('field', field)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('field', field.id, field.name)}>Delete</Button></div>
               </div>
             ))}
@@ -847,7 +861,6 @@ export default function AdminPage() {
           setFieldForm((current) => ({ ...current, tagId: '' }));
         }}>
           <option value="">Select application</option>
-          <option value="__all__">All Applications</option>
           {applications.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}
         </select>
         <Input placeholder="Field name" value={fieldForm.name} onChange={(event) => setFieldForm({ ...fieldForm, name: event.target.value })} />
@@ -856,11 +869,19 @@ export default function AdminPage() {
           <option value="pdf">PDF</option>
           <option value="image">Image</option>
         </select>
-        {selectedFieldApp && selectedFieldApp !== '__all__' ? <select className="select" value={fieldForm.tagId} onChange={(event) => setFieldForm({ ...fieldForm, tagId: event.target.value })}>
-          <option value="">General (default)</option>
-          {availableTags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+        {selectedFieldApp ? <select className="select" value={fieldForm.tagId} onChange={(event) => setFieldForm({ ...fieldForm, tagId: event.target.value })}>
+          <option value="">Select tag (required)</option>
+          <optgroup label="Application tags">
+            {groupedAvailableTags.application.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+          </optgroup>
+          <optgroup label="Company tags (All Applications in this company)">
+            {groupedAvailableTags.company.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+          </optgroup>
+          <optgroup label="System-wide global tags (All Applications in all companies)">
+            {groupedAvailableTags.global.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+          </optgroup>
         </select> : null}
-        <Button onClick={createField} disabled={!selectedFieldApp || !fieldForm.name.trim()}>Create</Button>
+        <Button onClick={createField} disabled={!selectedFieldApp || !fieldForm.name.trim() || !fieldForm.tagId}>Create</Button>
       </Modal>
 
       <Modal open={tagModal} onClose={() => setTagModal(false)} title="Create Tag">
@@ -909,7 +930,7 @@ export default function AdminPage() {
           <>
             <Input placeholder="Field name" value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} />
             <select className="select" value={editing.payload.tagId || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, tagId: event.target.value } }))}>
-              <option value="">General (default)</option>
+              <option value="">Select tag (required)</option>
               {(applications.find((app) => (app.fields || []).some((field) => field.id === editing.id))?.tags || []).map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
             </select>
           </>

@@ -78,17 +78,25 @@ try {
   assert(appCreate.response.ok, 'Create application failed');
   const appId = appCreate.payload.id;
 
+
+  const tagsResponse = await request(`/api/applications/${appId}/tags`, {
+    method: 'GET'
+  }, adminCookie);
+  assert(tagsResponse.response.ok, 'Fetch tags failed');
+  const defaultTagId = tagsResponse.payload.tags?.[0]?.id;
+  assert(defaultTagId, 'Missing default tag for field creation');
+
   const textFieldCreate = await request(`/api/applications/${appId}/fields`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'Title', type: 'text' })
+    body: JSON.stringify({ name: 'Title', type: 'text', tagId: defaultTagId })
   }, adminCookie);
   assert(textFieldCreate.response.ok, 'Create text field failed');
 
   const fileFieldCreate = await request(`/api/applications/${appId}/fields`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'Spec PDF', type: 'pdf' })
+    body: JSON.stringify({ name: 'Spec PDF', type: 'pdf', tagId: defaultTagId })
   }, adminCookie);
   assert(fileFieldCreate.response.ok, 'Create file field failed');
 

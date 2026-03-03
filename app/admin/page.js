@@ -777,14 +777,25 @@ export default function AdminPage() {
 
         {statusMessage ? <p className="error">{statusMessage}</p> : null}
 
-        <Card>
-          <div className="row">
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search companies" />
-            <Button onClick={() => setCompanyModal(true)}>New Company</Button>
-            <Button variant="secondary" onClick={() => setAppModal(true)}>New Application</Button>
-            <Button variant="secondary" onClick={() => setFieldModal(true)}>New Field</Button>
-            <Button variant="secondary" onClick={() => setTagModal(true)}>New Tag</Button>
-            <Button variant="secondary" onClick={() => setUserModal(true)}>New User</Button>
+        <Card className="control-bar-card">
+          <div className="admin-controls">
+            <div className="search-input-wrap">
+              <span className="search-icon" aria-hidden="true">🔎</span>
+              <Input
+                className="search-input"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search companies"
+              />
+            </div>
+
+            <div className="action-buttons-wrap">
+              <Button onClick={() => setCompanyModal(true)}>New Company</Button>
+              <Button variant="secondary" onClick={() => setAppModal(true)}>New Application</Button>
+              <Button variant="secondary" onClick={() => setFieldModal(true)}>New Field</Button>
+              <Button variant="secondary" onClick={() => setTagModal(true)}>New Tag</Button>
+              <Button variant="secondary" onClick={() => setUserModal(true)}>New User</Button>
+            </div>
           </div>
         </Card>
 

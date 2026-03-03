@@ -12,6 +12,7 @@ import { AdminSidebar } from '../../components/AdminSidebar';
 import { GroupedFieldsView } from '../../components/GroupedFieldsView';
 import { formatDateOnly } from '../../lib/formatDate';
 import { useAuth } from '../../components/AuthProvider';
+import { HeaderProfile } from '../../components/HeaderProfile';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -720,20 +721,6 @@ export default function AdminPage() {
   const filteredCompanies = data.filter((company) => company.name.toLowerCase().includes(search.toLowerCase()));
 
 
-  const formatDisplayName = (username = '') => {
-    const cleanedName = String(username || '').trim();
-    if (!cleanedName) return 'User';
-    return cleanedName
-      .replace(/[._-]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .split(' ')
-      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-      .join(' ');
-  };
-
-  const displayName = formatDisplayName(currentUserProfile?.username);
-  const displayEmail = currentUserProfile?.email?.trim() || 'Email unavailable';
-
   const onSidebarNavigate = (tab, applicationId = '') => {
     setActive(tab);
     if (tab === 'applications') {
@@ -776,10 +763,7 @@ export default function AdminPage() {
             <p className="subtitle">Structured management for all data center entities.</p>
           </div>
           <div className="profile">
-            <button className="profile-trigger" onClick={() => setProfileMenuOpen((value) => !value)}>
-              <strong>{displayName}</strong>
-              <p className="subtitle">{displayEmail}</p>
-            </button>
+            <HeaderProfile user={currentUserProfile} loading={authLoading} onClick={() => setProfileMenuOpen((value) => !value)} />
             {profileMenuOpen ? <div className="profile-menu"><button className="menu-item danger" onClick={() => setLogoutConfirmOpen(true)}>Logout</button></div> : null}
           </div>
         </header>

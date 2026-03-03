@@ -700,12 +700,14 @@ app.prepare().then(() => {
   server.get('/api/auth/me', authRequired, (req, res) => {
     const db = readDb();
     const account = db.users.find((entry) => entry.id === req.user.id);
+    const resolvedUsername = sanitizeText(account?.username || req.user.username);
+    const resolvedEmail = sanitizeText(account?.email || req.user.email) || `${resolvedUsername || 'user'}@novacode.local`;
 
     res.json({
       id: req.user.id,
-      username: req.user.username,
-      role: req.user.role,
-      email: account?.email || ''
+      username: resolvedUsername,
+      role: account?.role || req.user.role,
+      email: resolvedEmail
     });
   });
 

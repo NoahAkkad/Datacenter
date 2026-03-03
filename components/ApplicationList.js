@@ -6,10 +6,11 @@ export function ApplicationList({ applications }) {
   }
 
   return (
-    <div className="stack">
+    <div className="app-card-grid">
       {applications.map((application) => (
-        <Link key={application.id} className="record" href={`/dashboard/applications/${application.id}`}>
+        <Link key={application.id} className="app-card" href={`/dashboard/applications/${application.id}`}>
           <h3>{application.name}</h3>
+          <p className="subtitle">Open details</p>
         </Link>
       ))}
     </div>

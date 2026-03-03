@@ -7,11 +7,15 @@ import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import { Modal } from '../../components/ui/modal';
 import { ApplicationList } from '../../components/ApplicationList';
-import { UserSidebar } from '../../components/UserSidebar';
+import { AppLayout } from '../../components/AppLayout';
+
+const userNav = [
+  { key: 'home', label: 'Home', href: '/dashboard', icon: '🏠' },
+  { key: 'applications', label: 'Applications', href: '/dashboard?tab=applications', icon: '🧩' }
+];
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [collapsed, setCollapsed] = useState(false);
   const [active, setActive] = useState('home');
   const [query, setQuery] = useState('');
   const [applications, setApplications] = useState([]);
@@ -28,39 +32,25 @@ export default function DashboardPage() {
   useEffect(() => {
     const validateSession = async () => {
       const response = await fetch('/api/auth/me');
-      if (!response.ok) {
-        router.replace('/login?portal=user');
-        return;
-      }
-
+      if (!response.ok) return router.replace('/login?portal=user');
       const user = await response.json();
-      if (user.role === 'admin') {
-        router.replace('/admin');
-        return;
-      }
+      if (user.role === 'admin') return router.replace('/admin');
       setCheckingSession(false);
     };
-
     validateSession();
   }, [router]);
 
   useEffect(() => {
     if (checkingSession) return;
-
     const loadApplications = async () => {
       setError('');
       const params = new URLSearchParams();
       if (query.trim()) params.set('search', query.trim());
       const response = await fetch(`/api/applications?${params.toString()}`);
-      if (!response.ok) {
-        setError('Unable to load applications.');
-        return;
-      }
-
+      if (!response.ok) return setError('Unable to load applications.');
       const payload = await response.json();
       setApplications(payload.applications || []);
     };
-
     loadApplications();
   }, [checkingSession, query]);
 
@@ -78,67 +68,43 @@ export default function DashboardPage() {
     }
   };
 
-  const onSidebarNavigate = (tab) => {
-    setActive(tab);
-    if (tab === 'home') {
-      setQuery('');
-      setError('');
-    }
-  };
-
   const filteredCountLabel = useMemo(() => `${applications.length} application${applications.length === 1 ? '' : 's'}`, [applications]);
 
-  if (checkingSession) {
-    return (
-      <main className="page-center">
-        <Card>Validating session...</Card>
-      </main>
-    );
-  }
+  if (checkingSession) return <main className="page-center"><Card>Validating session...</Card></main>;
 
   return (
-    <main className="admin-shell">
-      <UserSidebar
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((value) => !value)}
+    <>
+      <AppLayout
+        title="User Dashboard"
+        subtitle="View available applications and open details."
+        navigationItems={userNav}
         activeTab={active}
-        onNavigate={onSidebarNavigate}
-      />
-
-      <section className="main">
-        <header className="dashboard-header">
-          <div>
-            <h1 className="title">User Dashboard</h1>
-            <p className="subtitle">View available applications and open details.</p>
-          </div>
-          <Button variant="secondary" onClick={() => setLogoutConfirmOpen(true)}>Logout</Button>
-        </header>
-
+        onNavigate={(tab) => {
+          setActive(tab);
+          if (tab === 'home') {
+            setQuery('');
+            setError('');
+          }
+        }}
+        actions={<Button variant="secondary" onClick={() => setLogoutConfirmOpen(true)}>Logout</Button>}
+      >
         {active === 'home' ? (
           <Card className="stack">
             <h2>Welcome Home</h2>
-            <p className="subtitle">Use the sidebar to jump to applications. Selecting Home resets search filters.</p>
+            <p className="subtitle">Use the sidebar to jump to applications.</p>
           </Card>
         ) : null}
 
-        {active === 'home' || active === 'applications' ? (
-          <>
-            <Card className="stack section-gap">
-              <Input
-                placeholder="Search applications"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-              <p className="subtitle">{filteredCountLabel}</p>
-              {error ? <p className="error">{error}</p> : null}
-            </Card>
+        <Card className="stack section-gap">
+          <Input placeholder="Search applications" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <p className="subtitle">{filteredCountLabel}</p>
+          {error ? <p className="error">{error}</p> : null}
+        </Card>
 
-            <Card className="section-gap">
-              <ApplicationList applications={applications} />
-            </Card>
-          </>
-        ) : null}
-      </section>
+        <Card className="section-gap">
+          <ApplicationList applications={applications} />
+        </Card>
+      </AppLayout>
 
       <Modal open={logoutConfirmOpen} onClose={() => !isLoggingOut && setLogoutConfirmOpen(false)} title="Confirm Logout">
         <p className="subtitle">Are you sure you want to logout?</p>
@@ -147,6 +113,6 @@ export default function DashboardPage() {
           <Button onClick={onLogout} disabled={isLoggingOut}>{isLoggingOut ? 'Logging out...' : 'Logout'}</Button>
         </div>
       </Modal>
-    </main>
+    </>
   );
 }

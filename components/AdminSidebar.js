@@ -2,15 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Button } from './ui/button';
+import { IconButton } from './ui/icon-button';
 
 const adminMenu = [
-  { key: 'home', label: '🏠 Home', href: '/admin' },
-  { key: 'companies', label: '🏢 Companies', href: '/admin?tab=companies' },
-  { key: 'applications', label: '🧩 Applications', href: '/admin?tab=applications' },
-  { key: 'fields', label: '🏷️ Dynamic Fields', href: '/admin?tab=fields' },
-  { key: 'users', label: '👥 Users', href: '/admin?tab=users' },
-  { key: 'upload', label: '📁 Company Information', href: '/admin?tab=upload' }
+  { key: 'home', label: 'Home', href: '/admin', icon: '🏠' },
+  { key: 'companies', label: 'Companies', href: '/admin?tab=companies', icon: '🏢' },
+  { key: 'applications', label: 'Applications', href: '/admin?tab=applications', icon: '🧩' },
+  { key: 'fields', label: 'Dynamic Fields', href: '/admin?tab=fields', icon: '🏷️' },
+  { key: 'users', label: 'Users', href: '/admin?tab=users', icon: '👥' },
+  { key: 'upload', label: 'Company Information', href: '/admin?tab=upload', icon: '📁' }
 ];
 
 export function AdminSidebar({ collapsed, onToggle, activeTab, onNavigate, applications = [], selectedApplicationId = '' }) {
@@ -18,19 +18,14 @@ export function AdminSidebar({ collapsed, onToggle, activeTab, onNavigate, appli
 
   return (
     <aside className={`sidebar ${collapsed ? 'compact' : ''}`}>
-      <Button variant="secondary" onClick={onToggle}>{collapsed ? '➡️' : '⬅️'}</Button>
+      <IconButton icon={collapsed ? '☰' : '←'} label="Toggle sidebar" onClick={onToggle} />
       <div className="stack sidebar-nav">
         {adminMenu.map((item) => {
           const isActive = pathname === '/admin' && activeTab === item.key;
-
           return (
-            <Link
-              key={item.key}
-              href={item.href}
-              className={`nav-btn ${isActive ? 'active' : ''}`}
-              onClick={() => onNavigate(item.key)}
-            >
-              {collapsed ? item.label.split(' ')[0] : item.label}
+            <Link key={item.key} href={item.href} className={`nav-btn ${isActive ? 'active' : ''}`} onClick={() => onNavigate(item.key)} title={collapsed ? item.label : ''}>
+              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
             </Link>
           );
         })}

@@ -10,6 +10,11 @@ import { Modal } from '../../components/ui/modal';
 import { DataTable } from '../../components/ui/table';
 import { AdminSidebar } from '../../components/AdminSidebar';
 import { GroupedFieldsView } from '../../components/GroupedFieldsView';
+import { IconButton } from '../../components/ui/icon-button';
+
+
+
+const actionIcons = { add: '➕', edit: '✏️', del: '🗑️', save: '✅', cancel: '✕' };
 
 export default function AdminPage() {
   const router = useRouter();
@@ -729,11 +734,11 @@ export default function AdminPage() {
         <Card>
           <div className="row">
             <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search companies" />
-            <Button onClick={() => setCompanyModal(true)}>New Company</Button>
-            <Button variant="secondary" onClick={() => setAppModal(true)}>New Application</Button>
-            <Button variant="secondary" onClick={() => setFieldModal(true)}>New Field</Button>
-            <Button variant="secondary" onClick={() => setTagModal(true)}>New Tag</Button>
-            <Button variant="secondary" onClick={() => setUserModal(true)}>New User</Button>
+            <IconButton icon={actionIcons.add} label="Add company" onClick={() => setCompanyModal(true)} />
+            <IconButton icon={actionIcons.add} label="Add application" onClick={() => setAppModal(true)} />
+            <IconButton icon={actionIcons.add} label="Add field" onClick={() => setFieldModal(true)} />
+            <IconButton icon={actionIcons.add} label="Add tag" onClick={() => setTagModal(true)} />
+            <IconButton icon={actionIcons.add} label="Add user" onClick={() => setUserModal(true)} />
           </div>
         </Card>
 
@@ -747,7 +752,7 @@ export default function AdminPage() {
                 {
                   key: 'actions',
                   label: 'Actions',
-                  render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('company', row)}>Edit</Button><Button onClick={() => openDelete('company', row.id, row.name)}>Delete</Button></div>
+                  render: (row) => <div className="icon-action-row"><IconButton icon={actionIcons.edit} label="Edit company" onClick={() => openEdit('company', row)} /><IconButton icon={actionIcons.del} label="Delete company" variant="danger" onClick={() => openDelete('company', row.id, row.name)} /></div>
                 }
               ]}
               data={filteredCompanies}
@@ -763,7 +768,7 @@ export default function AdminPage() {
                 {
                   key: 'actions',
                   label: 'Actions',
-                  render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('application', row)}>Edit</Button><Button onClick={() => openDelete('application', row.id, row.name)}>Delete</Button></div>
+                  render: (row) => <div className="icon-action-row"><IconButton icon={actionIcons.edit} label="Edit application" onClick={() => openEdit('application', row)} /><IconButton icon={actionIcons.del} label="Delete application" variant="danger" onClick={() => openDelete('application', row.id, row.name)} /></div>
                 }
               ]}
               data={applications}
@@ -777,14 +782,14 @@ export default function AdminPage() {
             {fields.map((field) => (
               <div className="row" key={field.id}>
                 <Badge>{field.name} · {field.type} · {field.tagName || 'Uncategorized'} · {field.appName}</Badge>
-                <div className="row"><Button variant="secondary" onClick={() => openEdit('field', field)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('field', field.id, field.name)}>Delete</Button></div>
+                <div className="icon-action-row"><IconButton icon={actionIcons.edit} label="Edit field" onClick={() => openEdit('field', field)} /><IconButton icon={actionIcons.del} label="Delete field" variant="danger" onClick={() => openDelete('field', field.id, field.name)} /></div>
               </div>
             ))}
             <h3 className="section-mini-gap">Tag Management</h3>
             {tagRows.map((tag) => (
               <div className="row" key={tag.id}>
                 <Badge>{tag.name} · {tag.scopeLabel} · {tag.applicationName} · {tag.companyName}</Badge>
-                <div className="row"><Button variant="secondary" onClick={() => openEdit('tag', tag)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('tag', tag.id, tag.name)}>Delete</Button></div>
+                <div className="icon-action-row"><IconButton icon={actionIcons.edit} label="Edit tag" onClick={() => openEdit('tag', tag)} /><IconButton icon={actionIcons.del} label="Delete tag" variant="danger" onClick={() => openDelete('tag', tag.id, tag.name)} /></div>
               </div>
             ))}
           </Card> : null}
@@ -799,7 +804,7 @@ export default function AdminPage() {
                 {
                   key: 'actions',
                   label: 'Actions',
-                  render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('application', row)}>Edit</Button><Button onClick={() => openDelete('application', row.id, row.name)}>Delete</Button></div>
+                  render: (row) => <div className="icon-action-row"><IconButton icon={actionIcons.edit} label="Edit application" onClick={() => openEdit('application', row)} /><IconButton icon={actionIcons.del} label="Delete application" variant="danger" onClick={() => openDelete('application', row.id, row.name)} /></div>
                 }
               ]}
               data={applications}
@@ -814,7 +819,7 @@ export default function AdminPage() {
                   {
                     key: 'actions',
                     label: 'Actions',
-                    render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('data', row)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('data', row.id, `${row.appName} / ${row.id}`)}>Delete</Button></div>
+                    render: (row) => <div className="icon-action-row"><IconButton icon={actionIcons.edit} label="Edit record" onClick={() => openEdit('data', row)} /><IconButton icon={actionIcons.del} label="Delete record" variant="danger" onClick={() => openDelete('data', row.id, `${row.appName} / ${row.id}`)} /></div>
                   }
                 ]}
                 data={applicationRecords}
@@ -897,7 +902,7 @@ export default function AdminPage() {
           <Card className="stack">
             <h2>User Management</h2>
             <p className="subtitle">Create and manage normal users.</p>
-            <Button onClick={() => setUserModal(true)}>New User</Button>
+            <IconButton icon={actionIcons.add} label="Add user" onClick={() => setUserModal(true)} />
             <DataTable
               columns={[
                 { key: 'username', label: 'Username' },
@@ -907,10 +912,10 @@ export default function AdminPage() {
                   label: 'Actions',
                   render: (row) => (
                     <div className="row">
-                      <Button variant="secondary" onClick={() => openEdit('user', row)}>Edit</Button>
+                      <IconButton icon={actionIcons.edit} label="Edit user" onClick={() => openEdit('user', row)} />
                       {row.role === 'admin' || row.id === currentUserId
-                        ? <Button disabled title="Protected account">🗑️ Delete</Button>
-                        : <Button onClick={() => openDelete('user', row.id, row.username)} disabled={deletingUserId === row.id}>{deletingUserId === row.id ? 'Deleting...' : '🗑️ Delete'}</Button>}
+                        ? <IconButton icon={actionIcons.del} label="Protected account" variant="danger" disabled title="Protected account" />
+                        : <IconButton icon={actionIcons.del} label={deletingUserId === row.id ? 'Deleting user' : 'Delete user'} variant="danger" onClick={() => openDelete('user', row.id, row.username)} disabled={deletingUserId === row.id} />}
                     </div>
                   )
                 }

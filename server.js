@@ -275,6 +275,10 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
       const matchedTag = tagById.get(field.tagId) || null;
       const tagLabel = matchedTag?.name || field.tagName || 'Uncategorized';
       const scope = resolveTagScope(matchedTag || {});
+      const fieldMetadata = {
+        createdAt: field.createdAt || null,
+        updatedAt: field.updatedAt || null
+      };
 
       if (field.type === 'text') {
         return {
@@ -284,7 +288,8 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
           tagId: matchedTag?.id || null,
           tagName: tagLabel,
           tagScope: scope,
-          tagScopeType: toScopeType(scope)
+          tagScopeType: toScopeType(scope),
+          ...fieldMetadata
         };
       }
 
@@ -296,7 +301,8 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
           tagId: matchedTag?.id || null,
           tagName: tagLabel,
           tagScope: scope,
-          tagScopeType: toScopeType(scope)
+          tagScopeType: toScopeType(scope),
+          ...fieldMetadata
         };
       }
 
@@ -309,7 +315,8 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
           tagName: tagLabel,
           tagScope: scope,
           tagScopeType: toScopeType(scope),
-          empty: true
+          empty: true,
+          ...fieldMetadata
         };
       }
 
@@ -320,7 +327,8 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
         tagId: matchedTag?.id || null,
         tagName: tagLabel,
         tagScope: scope,
-        tagScopeType: toScopeType(scope)
+        tagScopeType: toScopeType(scope),
+        ...fieldMetadata
       };
     })
     .filter((field) => Boolean(field.tagId));

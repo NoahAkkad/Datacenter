@@ -362,7 +362,7 @@ export default function AdminPage() {
       const initialValues = {};
       (payload.applications || []).forEach((application) => {
         (application.fields || []).forEach((field) => {
-          if (field.type === 'text') {
+          if (field.type === 'text' || field.type === 'link') {
             initialValues[field.id] = application.values?.[field.id] || '';
           }
         });
@@ -396,7 +396,7 @@ export default function AdminPage() {
       const updates = companyFieldPayload.applications.map(async (application) => {
         const formData = new FormData();
         const textValues = (application.fields || []).reduce((accumulator, field) => {
-          if (field.type === 'text') {
+          if (field.type === 'text' || field.type === 'link') {
             accumulator[field.id] = recordTextValues[field.id] || '';
           }
           return accumulator;
@@ -404,7 +404,7 @@ export default function AdminPage() {
 
         formData.append('values', JSON.stringify(textValues));
         (application.fields || [])
-          .filter((field) => field.type !== 'text')
+          .filter((field) => field.type === 'pdf' || field.type === 'image')
           .forEach((field) => {
             const file = recordFiles[field.id];
             if (file) {
@@ -437,7 +437,7 @@ export default function AdminPage() {
   const openEdit = (type, row) => {
     if (type === 'company') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Company' });
     if (type === 'application') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Application' });
-    if (type === 'field') setEditing({ open: true, type, id: row.id, payload: { name: row.name, tagId: row.tagId || '' }, title: 'Edit Field' });
+    if (type === 'field') setEditing({ open: true, type, id: row.id, payload: { name: row.name, type: row.type || 'text', tagId: row.tagId || '' }, title: 'Edit Field' });
     if (type === 'tag') setEditing({ open: true, type, id: row.id, payload: { name: row.name, description: row.description || '', scope: row.scope || (row.allApplications ? 'company' : 'application'), companyId: row.companyId || '', applicationId: row.applicationId || '' }, title: 'Edit Tag' });
     if (type === 'data') setEditing({ open: true, type, id: row.id, payload: { values: row.values || {} }, title: `Edit Record ${row.id}` });
     if (type === 'user') setEditing({ open: true, type, id: row.id, payload: { username: row.username, password: '' }, title: 'Edit User' });
@@ -815,11 +815,19 @@ export default function AdminPage() {
               <Badge>{application.applicationName}</Badge>
               {(application.fields || []).map((field) => {
                 const existingValue = application.values?.[field.id];
-                if (field.type === 'text') {
+                if (field.type === 'text' || field.type === 'link') {
                   return (
                     <div key={field.id}>
                       <strong>{field.name}</strong>
-                      <Input value={recordTextValues[field.id] || ''} onChange={(event) => setRecordTextValues((current) => ({ ...current, [field.id]: event.target.value }))} />
+                      {field.type === 'link' && existingValue ? (
+                        <p><a className="link" href={String(existingValue).startsWith('http://') || String(existingValue).startsWith('https://') ? String(existingValue) : `https://${String(existingValue)}`} target="_blank" rel="noopener noreferrer">Open current link</a></p>
+                      ) : null}
+                      <Input
+                        type={field.type === 'link' ? 'url' : 'text'}
+                        placeholder={field.type === 'link' ? 'https://example.com' : ''}
+                        value={recordTextValues[field.id] || ''}
+                        onChange={(event) => setRecordTextValues((current) => ({ ...current, [field.id]: event.target.value }))}
+                      />
                     </div>
                   );
                 }
@@ -827,8 +835,8 @@ export default function AdminPage() {
                 return (
                   <div key={field.id} className="stack">
                     <strong>{field.name}</strong>
-                    {field.type === 'image' && existingValue?.url ? <img src={existingValue.url} alt={existingValue.originalname || field.name} style={{ maxWidth: '220px', borderRadius: '8px' }} /> : null}
-                    {existingValue?.url ? <a href={existingValue.url} target="_blank" rel="noreferrer">Current file: {existingValue.originalname || existingValue.filename || 'Open file'}</a> : <p className="subtitle">No file uploaded yet.</p>}
+                    {field.type === 'image' && existingValue?.url ? <a href={existingValue.url} target="_blank" rel="noopener noreferrer"><img src={existingValue.url} alt={existingValue.originalname || field.name} style={{ maxWidth: '220px', borderRadius: '8px' }} /></a> : null}
+                    {existingValue?.url ? <a href={existingValue.url} target="_blank" rel="noopener noreferrer">Current file: {existingValue.originalname || existingValue.filename || 'Open file'}</a> : <p className="subtitle">No file uploaded yet.</p>}
                     <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles((current) => ({ ...current, [field.id]: event.target.files?.[0] }))} />
                   </div>
                 );
@@ -901,8 +909,9 @@ export default function AdminPage() {
         <Input placeholder="Field name" value={fieldForm.name} onChange={(event) => setFieldForm({ ...fieldForm, name: event.target.value })} />
         <select className="select" value={fieldForm.type} onChange={(event) => setFieldForm({ ...fieldForm, type: event.target.value })}>
           <option value="text">Text</option>
-          <option value="pdf">PDF</option>
           <option value="image">Image</option>
+          <option value="pdf">PDF</option>
+          <option value="link">Link</option>
         </select>
         {selectedFieldApp ? <>
           <select className="select" value={fieldForm.tagId} onChange={(event) => setFieldForm({ ...fieldForm, tagId: event.target.value })} disabled={availableTags.length === 0}>
@@ -967,6 +976,12 @@ export default function AdminPage() {
         {editing.type === 'field' ? (
           <>
             <Input placeholder="Field name" value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} />
+            <select className="select" value={editing.payload.type || 'text'} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, type: event.target.value } }))}>
+              <option value="text">Text</option>
+              <option value="image">Image</option>
+              <option value="pdf">PDF</option>
+              <option value="link">Link</option>
+            </select>
             <select className="select" value={editing.payload.tagId || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, tagId: event.target.value } }))}>
               <option value="">Select tag (required)</option>
               {(applications.find((app) => (app.fields || []).some((field) => field.id === editing.id))?.tags || []).map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
@@ -989,8 +1004,8 @@ export default function AdminPage() {
         </> : null}
         {editing.type === 'data' ? fields.filter((field) => records.find((record) => record.id === editing.id)?.applicationId === field.applicationId).map((field) => {
           const currentValue = editing.payload.values?.[field.id];
-          if (field.type === 'text') {
-            return <Input key={field.id} placeholder={field.name} value={currentValue || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, values: { ...current.payload.values, [field.id]: event.target.value } } }))} />;
+          if (field.type === 'text' || field.type === 'link') {
+            return <Input key={field.id} type={field.type === 'link' ? 'url' : 'text'} placeholder={field.type === 'link' ? `${field.name} (https://...)` : field.name} value={currentValue || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, values: { ...current.payload.values, [field.id]: event.target.value } } }))} />;
           }
           return (
             <div key={field.id} className="stack">

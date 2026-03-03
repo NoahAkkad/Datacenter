@@ -76,6 +76,25 @@ function sanitizeText(value) {
   return String(value || '').trim();
 }
 
+function normalizeLinkValue(value) {
+  const trimmed = sanitizeText(value);
+  if (!trimmed) {
+    return { valid: true, value: '' };
+  }
+
+  const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  try {
+    const parsed = new URL(normalized);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return { valid: false, value: '' };
+    }
+    return { valid: true, value: normalized };
+  } catch {
+    return { valid: false, value: '' };
+  }
+}
+
 function normalizeFieldName(value) {
   return sanitizeText(value).toLowerCase();
 }
@@ -262,6 +281,18 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
           label: field.name,
           type: 'text',
           value: rawValue === undefined || rawValue === null ? '—' : String(rawValue),
+          tagId: matchedTag?.id || null,
+          tagName: tagLabel,
+          tagScope: scope,
+          tagScopeType: toScopeType(scope)
+        };
+      }
+
+      if (field.type === 'link') {
+        return {
+          label: field.name,
+          type: 'link',
+          value: rawValue === undefined || rawValue === null ? '' : String(rawValue),
           tagId: matchedTag?.id || null,
           tagName: tagLabel,
           tagScope: scope,
@@ -832,7 +863,7 @@ app.prepare().then(() => {
   server.post('/api/applications/:applicationId/fields', authRequired, requireRole('admin'), (req, res) => {
     const { applicationId } = req.params;
     const { name, type, applicationIds = [], tagId } = req.body;
-    const allowedTypes = ['text', 'pdf', 'image'];
+    const allowedTypes = ['text', 'pdf', 'image', 'link'];
     const nextName = sanitizeText(name);
 
     if (!allowedTypes.includes(type)) {
@@ -953,9 +984,29 @@ app.prepare().then(() => {
       return;
     }
 
+    for (const field of applicationFields) {
+      if (!(field.id in values)) {
+        continue;
+      }
+
+      if (field.type === 'text') {
+        values[field.id] = sanitizeText(values[field.id]);
+        continue;
+      }
+
+      if (field.type === 'link') {
+        const normalizedLink = normalizeLinkValue(values[field.id]);
+        if (!normalizedLink.valid) {
+          res.status(400).json({ error: `Invalid URL for field: ${field.name}` });
+          return;
+        }
+        values[field.id] = normalizedLink.value;
+      }
+    }
+
     const files = req.files || [];
     applicationFields
-      .filter((field) => field.type !== 'text')
+      .filter((field) => ['pdf', 'image'].includes(field.type))
       .forEach((field) => {
         const matched = files.find((file) => file.fieldname === field.id);
         if (matched) {
@@ -1174,7 +1225,7 @@ app.prepare().then(() => {
 
   const updateFieldHandler = (req, res) => {
     const { id } = req.params;
-    const allowedTypes = ['text', 'pdf', 'image'];
+    const allowedTypes = ['text', 'pdf', 'image', 'link'];
     if (!isNonEmptyId(id)) {
       logUpdateIssue('field', 'Invalid ID', { id });
       res.status(400).json({ error: 'Invalid ID' });
@@ -1315,17 +1366,28 @@ app.prepare().then(() => {
       return;
     }
 
-    applicationFields.forEach((field) => {
-      if (!(field.id in patchValues)) return;
+    record.values = record.values || {};
+    for (const field of applicationFields) {
+      if (!(field.id in patchValues)) continue;
       const incomingValue = patchValues[field.id];
 
       if (field.type === 'text') {
         record.values[field.id] = sanitizeText(incomingValue);
-        return;
+        continue;
+      }
+
+      if (field.type === 'link') {
+        const normalizedLink = normalizeLinkValue(incomingValue);
+        if (!normalizedLink.valid) {
+          res.status(400).json({ error: `Invalid URL for field: ${field.name}` });
+          return;
+        }
+        record.values[field.id] = normalizedLink.value;
+        continue;
       }
 
       const existingFile = record.values[field.id];
-      if (!existingFile || typeof existingFile !== 'object') return;
+      if (!existingFile || typeof existingFile !== 'object') continue;
 
       const nextFileName = sanitizeText(incomingValue?.originalname ?? existingFile.originalname);
       const nextDescription = sanitizeText(incomingValue?.description ?? existingFile.description);
@@ -1334,7 +1396,7 @@ app.prepare().then(() => {
         originalname: nextFileName || existingFile.originalname,
         description: nextDescription
       };
-    });
+    }
 
     writeDb(db);
     logUpdateSuccess('record', id, { values: record.values }, req.user);

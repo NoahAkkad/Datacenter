@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Modal } from '../../components/ui/modal';
 import { DataTable } from '../../components/ui/table';
+import { LinkDisplay } from '../../components/ui/link-display';
 import { AdminSidebar } from '../../components/AdminSidebar';
 
 export default function AdminPage() {
@@ -820,7 +821,7 @@ export default function AdminPage() {
                     <div key={field.id}>
                       <strong>{field.name}</strong>
                       {field.type === 'link' && existingValue ? (
-                        <p><a className="link" href={String(existingValue).startsWith('http://') || String(existingValue).startsWith('https://') ? String(existingValue) : `https://${String(existingValue)}`} target="_blank" rel="noopener noreferrer">Open current link</a></p>
+                        <LinkDisplay value={existingValue} />
                       ) : null}
                       <Input
                         type={field.type === 'link' ? 'url' : 'text'}

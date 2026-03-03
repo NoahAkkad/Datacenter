@@ -6,13 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { Card } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
 import { Modal } from '../../../../components/ui/modal';
+import { LinkDisplay } from '../../../../components/ui/link-display';
 
-
-function formatLinkHref(value) {
-  const linkValue = String(value || '').trim();
-  if (!linkValue) return '';
-  return /^https?:\/\//i.test(linkValue) ? linkValue : `https://${linkValue}`;
-}
 
 function formatDate(value) {
   if (!value) return '—';
@@ -117,7 +112,7 @@ export default function ApplicationDetailsPage() {
                     ) : field.type === 'pdf' ? (
                       field.fileUrl ? <a className="link" href={field.fileUrl} target="_blank" rel="noopener noreferrer">Open PDF</a> : <span>—</span>
                     ) : field.type === 'link' ? (
-                      field.value ? <a className="link" href={formatLinkHref(field.value)} target="_blank" rel="noopener noreferrer">Open Link</a> : <span>—</span>
+                      <LinkDisplay value={field.value} />
                     ) : (
                       <span>—</span>
                     )}

@@ -8,6 +8,7 @@ import { UserSidebar } from '../../../../components/UserSidebar';
 import { GroupedFieldsView } from '../../../../components/GroupedFieldsView';
 import { useAuth } from '../../../../components/AuthProvider';
 import { HeaderMenu } from '../../../../components/HeaderMenu';
+import { Skeleton } from '../../../../components/ui/skeleton';
 
 export default function ApplicationDetailsPage() {
   const router = useRouter();
@@ -101,7 +102,11 @@ export default function ApplicationDetailsPage() {
         {detailsError ? <Card className="error section-gap">{detailsError}</Card> : null}
 
         {loadingDetails ? (
-          <Card className="section-gap">Loading application details...</Card>
+          <Card className="section-gap stack">
+            <Skeleton style={{ height: 24, width: '35%' }} />
+            <Skeleton style={{ height: 52, width: '100%' }} />
+            <Skeleton style={{ height: 52, width: '100%' }} />
+          </Card>
         ) : (
           <div className="section-gap">
             <GroupedFieldsView groupedFields={applicationDetails?.groupedFields || []} />

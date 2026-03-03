@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
 import { UserSidebar } from '../../components/UserSidebar';
 import { useAuth } from '../../components/AuthProvider';
 import { HeaderMenu } from '../../components/HeaderMenu';
+import { Skeleton } from '../../components/ui/skeleton';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -94,7 +96,11 @@ export default function DashboardPage() {
         {applicationsError ? <Card className="error">{applicationsError}</Card> : null}
 
         {loadingApplications ? (
-          <Card>Loading applications...</Card>
+          <Card className="stack">
+            <Skeleton style={{ height: 24, width: '36%' }} />
+            <Skeleton style={{ height: 68, width: '100%' }} />
+            <Skeleton style={{ height: 68, width: '100%' }} />
+          </Card>
         ) : (
           <section className="app-list-stack">
             <h2 className="section-title">Applications</h2>
@@ -115,8 +121,10 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <Card>
-                <p className="subtitle">No applications are currently available.</p>
+              <Card className="empty-state-card">
+                <h3 className="card-title">No applications yet</h3>
+                <p className="subtitle">Once applications are assigned to your account, they will appear here.</p>
+                <Button className="empty-cta" variant="secondary" onClick={() => window.location.reload()}>Refresh list</Button>
               </Card>
             )}
           </section>

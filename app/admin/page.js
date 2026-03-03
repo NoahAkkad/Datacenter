@@ -14,6 +14,50 @@ import { formatDateOnly } from '../../lib/formatDate';
 import { useAuth } from '../../components/AuthProvider';
 import { HeaderMenu } from '../../components/HeaderMenu';
 
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4 20h4l10-10-4-4L4 16v4Z" />
+      <path d="m12.5 7.5 4 4" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  );
+}
+
+function DuplicateIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="9" y="9" width="10" height="10" rx="2" />
+      <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function ActionIconButton({ label, color = 'blue', className = '', children, ...props }) {
+  return (
+    <button
+      type="button"
+      className={`action-icon-btn action-icon-btn--${color} ${className}`.trim()}
+      aria-label={label}
+      title={label}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const { user: currentUserProfile, loading: authLoading, clearUser } = useAuth();
@@ -183,7 +227,16 @@ export default function AdminPage() {
     {
       key: 'actions',
       label: 'Actions',
-      render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('data', row)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('data', row.id, `${row.appName} / ${row.id}`)}>Delete</Button></div>
+      render: (row) => (
+        <div className="action-icon-group">
+          <ActionIconButton label="Edit" onClick={() => openEdit('data', row)}>
+            <PencilIcon />
+          </ActionIconButton>
+          <ActionIconButton label="Delete" color="danger" onClick={() => openDelete('data', row.id, `${row.appName} / ${row.id}`)}>
+            <TrashIcon />
+          </ActionIconButton>
+        </div>
+      )
     }
   ];
 
@@ -857,18 +910,19 @@ export default function AdminPage() {
                   key: 'actions',
                   label: 'Actions',
                   render: (row) => (
-                    <div className="row">
-                      <Button variant="secondary" onClick={() => openEdit('company', row)}>Edit</Button>
-                      <Button
-                        variant="secondary"
-                        className="icon-button"
-                        title="Duplicate company"
-                        aria-label={`Duplicate ${row.name}`}
+                    <div className="action-icon-group">
+                      <ActionIconButton label="Edit" onClick={() => openEdit('company', row)}>
+                        <PencilIcon />
+                      </ActionIconButton>
+                      <ActionIconButton
+                        label={`Duplicate ${row.name}`}
                         onClick={() => openDuplicateCompanyModal(row)}
                       >
-                        📄
-                      </Button>
-                      <Button onClick={() => openDelete('company', row.id, row.name)}>Delete</Button>
+                        <DuplicateIcon />
+                      </ActionIconButton>
+                      <ActionIconButton label="Delete" color="danger" onClick={() => openDelete('company', row.id, row.name)}>
+                        <TrashIcon />
+                      </ActionIconButton>
                     </div>
                   )
                 }
@@ -886,7 +940,7 @@ export default function AdminPage() {
                 {
                   key: 'actions',
                   label: 'Actions',
-                  render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('application', row)}>Edit</Button><Button onClick={() => openDelete('application', row.id, row.name)}>Delete</Button></div>
+                  render: (row) => <div className="action-icon-group"><ActionIconButton label="Edit" onClick={() => openEdit('application', row)}><PencilIcon /></ActionIconButton><ActionIconButton label="Delete" color="danger" onClick={() => openDelete('application', row.id, row.name)}><TrashIcon /></ActionIconButton></div>
                 }
               ]}
               data={applications}
@@ -900,14 +954,14 @@ export default function AdminPage() {
             {fields.map((field) => (
               <div className="row" key={field.id}>
                 <Badge>{field.name} · {field.type} · {field.tagName || 'Uncategorized'} · {field.appName}</Badge>
-                <div className="row"><Button variant="secondary" onClick={() => openEdit('field', field)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('field', field.id, field.name)}>Delete</Button></div>
+                <div className="action-icon-group"><ActionIconButton label="Edit" onClick={() => openEdit('field', field)}><PencilIcon /></ActionIconButton><ActionIconButton label="Delete" color="danger" onClick={() => openDelete('field', field.id, field.name)}><TrashIcon /></ActionIconButton></div>
               </div>
             ))}
             <h3 className="section-mini-gap">Tag Management</h3>
             {tagRows.map((tag) => (
               <div className="row" key={tag.id}>
                 <Badge>{tag.name} · {tag.scopeLabel} · {tag.applicationName} · {tag.companyName}</Badge>
-                <div className="row"><Button variant="secondary" onClick={() => openEdit('tag', tag)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('tag', tag.id, tag.name)}>Delete</Button></div>
+                <div className="action-icon-group"><ActionIconButton label="Edit" onClick={() => openEdit('tag', tag)}><PencilIcon /></ActionIconButton><ActionIconButton label="Delete" color="danger" onClick={() => openDelete('tag', tag.id, tag.name)}><TrashIcon /></ActionIconButton></div>
               </div>
             ))}
           </Card> : null}
@@ -922,7 +976,7 @@ export default function AdminPage() {
                 {
                   key: 'actions',
                   label: 'Actions',
-                  render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('application', row)}>Edit</Button><Button onClick={() => openDelete('application', row.id, row.name)}>Delete</Button></div>
+                  render: (row) => <div className="action-icon-group"><ActionIconButton label="Edit" onClick={() => openEdit('application', row)}><PencilIcon /></ActionIconButton><ActionIconButton label="Delete" color="danger" onClick={() => openDelete('application', row.id, row.name)}><TrashIcon /></ActionIconButton></div>
                 }
               ]}
               data={applications}
@@ -1069,11 +1123,13 @@ export default function AdminPage() {
                   key: 'actions',
                   label: 'Actions',
                   render: (row) => (
-                    <div className="row">
-                      <Button variant="secondary" onClick={() => openEdit('user', row)}>Edit</Button>
+                    <div className="action-icon-group">
+                      <ActionIconButton label="Edit" onClick={() => openEdit('user', row)}>
+                        <PencilIcon />
+                      </ActionIconButton>
                       {row.role === 'admin' || row.id === currentUserProfile?.id
-                        ? <Button disabled title="Protected account">🗑️ Delete</Button>
-                        : <Button onClick={() => openDelete('user', row.id, row.username)} disabled={deletingUserId === row.id}>{deletingUserId === row.id ? 'Deleting...' : '🗑️ Delete'}</Button>}
+                        ? <ActionIconButton label="Protected account" color="danger" disabled><TrashIcon /></ActionIconButton>
+                        : <ActionIconButton label={deletingUserId === row.id ? 'Deleting' : 'Delete'} color="danger" onClick={() => openDelete('user', row.id, row.username)} disabled={deletingUserId === row.id}><TrashIcon /></ActionIconButton>}
                     </div>
                   )
                 }

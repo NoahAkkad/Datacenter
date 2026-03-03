@@ -1800,6 +1800,12 @@ app.prepare().then(() => {
       };
     }
 
+    const now = new Date().toISOString();
+    if (!record.createdAt) {
+      record.createdAt = now;
+    }
+    record.updatedAt = now;
+
     writeDb(db);
     logUpdateSuccess('record', id, { values: record.values }, req.user);
     sendUpdateSuccess(res, record);

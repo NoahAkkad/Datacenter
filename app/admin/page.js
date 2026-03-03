@@ -124,6 +124,71 @@ export default function AdminPage() {
     [records, selectedApp]
   );
 
+  const recordRowsWithDates = useMemo(
+    () => applicationRecords.map((record) => {
+      const createdDate = formatDateOnly(record.createdAt);
+      const updatedDate = formatDateOnly(record.updatedAt);
+      const showUpdatedDate = Boolean(updatedDate && updatedDate !== createdDate);
+
+      return {
+        ...record,
+        createdDate,
+        updatedDate: showUpdatedDate ? updatedDate : null
+      };
+    }),
+    [applicationRecords]
+  );
+
+  const showCreatedDateColumn = useMemo(
+    () => recordRowsWithDates.some((record) => Boolean(record.createdDate)),
+    [recordRowsWithDates]
+  );
+
+  const showUpdatedDateColumn = useMemo(
+    () => recordRowsWithDates.some((record) => Boolean(record.updatedDate)),
+    [recordRowsWithDates]
+  );
+
+  const recordTableColumns = [
+    { key: 'appName', label: 'Application' },
+    {
+      key: 'id',
+      label: 'Record ID',
+      render: (row) => (
+        <div className="record-id-cell">
+          <span>{row.id}</span>
+          <div className="record-date-stack-mobile">
+            {showCreatedDateColumn && row.createdDate ? <span className="record-date-text">Created: {row.createdDate}</span> : null}
+            {showUpdatedDateColumn && row.updatedDate ? <span className="record-date-text">Updated: {row.updatedDate}</span> : null}
+          </div>
+        </div>
+      )
+    },
+    ...(showCreatedDateColumn
+      ? [{
+        key: 'createdDate',
+        label: 'Created',
+        headerClassName: 'record-date-column',
+        cellClassName: 'record-date-column',
+        render: (row) => <span className="record-date-text">{row.createdDate}</span>
+      }]
+      : []),
+    ...(showUpdatedDateColumn
+      ? [{
+        key: 'updatedDate',
+        label: 'Updated',
+        headerClassName: 'record-date-column',
+        cellClassName: 'record-date-column',
+        render: (row) => <span className="record-date-text">{row.updatedDate}</span>
+      }]
+      : []),
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('data', row)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('data', row.id, `${row.appName} / ${row.id}`)}>Delete</Button></div>
+    }
+  ];
+
   const selectedApplication = useMemo(
     () => applications.find((entry) => entry.id === selectedApp),
     [applications, selectedApp]
@@ -877,16 +942,9 @@ export default function AdminPage() {
             {active === 'applications' ? <>
               <h2 className="section-mini-gap">{selectedApplication?.name ? `${selectedApplication.name} Records` : 'Application Records'}</h2>
               <DataTable
-                columns={[
-                  { key: 'appName', label: 'Application' },
-                  { key: 'id', label: 'Record ID' },
-                  {
-                    key: 'actions',
-                    label: 'Actions',
-                    render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('data', row)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('data', row.id, `${row.appName} / ${row.id}`)}>Delete</Button></div>
-                  }
-                ]}
-                data={applicationRecords}
+                className="record-metadata-table"
+                columns={recordTableColumns}
+                data={recordRowsWithDates}
               />
             </> : null}
           </Card> : null}

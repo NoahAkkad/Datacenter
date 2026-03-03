@@ -12,8 +12,6 @@ import { HeaderMenu } from '../../components/HeaderMenu';
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading, clearUser } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
-  const [active, setActive] = useState('home');
   const [loadingApplications, setLoadingApplications] = useState(false);
   const [applications, setApplications] = useState([]);
   const [applicationsError, setApplicationsError] = useState('');
@@ -84,10 +82,7 @@ export default function DashboardPage() {
   return (
     <main className="admin-shell">
       <UserSidebar
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((value) => !value)}
-        activeTab={active}
-        onNavigate={setActive}
+        onNavigate={() => {}}
       />
 
       <section className="main">

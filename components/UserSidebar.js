@@ -2,19 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Button } from './ui/button';
 
 const userMenu = [
   { key: 'home', label: 'Home', href: '/dashboard' }
 ];
 
-export function UserSidebar({ collapsed, onToggle, activeTab, onNavigate }) {
+export function UserSidebar({ onNavigate }) {
   const pathname = usePathname();
 
   return (
-    <aside className={`sidebar ${collapsed ? 'compact' : ''}`}>
-      <div className="sidebar-brand">{collapsed ? 'DC' : 'Datacenter'}</div>
-      <Button variant="secondary" className="sidebar-toggle" onClick={onToggle}>{collapsed ? '→' : '←'}</Button>
+    <aside className="sidebar">
+      <div className="sidebar-brand">Datacenter</div>
       <div className="stack sidebar-nav">
         {userMenu.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith('/dashboard/application/');
@@ -26,7 +24,7 @@ export function UserSidebar({ collapsed, onToggle, activeTab, onNavigate }) {
               className={`nav-btn ${isActive ? 'active' : ''}`}
               onClick={() => onNavigate(item.key)}
             >
-              {collapsed ? item.label.split(' ')[0] : item.label}
+              {item.label}
             </Link>
           );
         })}

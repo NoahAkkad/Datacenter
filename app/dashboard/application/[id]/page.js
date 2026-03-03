@@ -15,8 +15,6 @@ export default function ApplicationDetailsPage() {
   const applicationId = params?.id;
   const { user, loading: authLoading, clearUser } = useAuth();
 
-  const [collapsed, setCollapsed] = useState(false);
-  const [active, setActive] = useState('home');
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState('');
   const [applicationDetails, setApplicationDetails] = useState(null);
@@ -86,10 +84,7 @@ export default function ApplicationDetailsPage() {
   return (
     <main className="admin-shell">
       <UserSidebar
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((value) => !value)}
-        activeTab={active}
-        onNavigate={setActive}
+        onNavigate={() => {}}
       />
 
       <section className="main">

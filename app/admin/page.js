@@ -17,7 +17,6 @@ import { HeaderMenu } from '../../components/HeaderMenu';
 export default function AdminPage() {
   const router = useRouter();
   const { user: currentUserProfile, loading: authLoading, clearUser } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
   const [active, setActive] = useState('home');
   const [data, setData] = useState([]);
   const [users, setUsers] = useState([]);
@@ -810,8 +809,6 @@ export default function AdminPage() {
   return (
     <main className="admin-shell">
       <AdminSidebar
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((value) => !value)}
         activeTab={active}
         onNavigate={onSidebarNavigate}
         applications={applications}

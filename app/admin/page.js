@@ -917,104 +917,117 @@ export default function AdminPage() {
           </Card> : null}
         </div> : null}
 
-        {active === 'home' || active === 'upload' ? <div className="grid-2 section-gap"><Card className="stack">
-          <h2>Company Information</h2>
-          <div className="row">
-            <select className="select" value={selectedCompany} onChange={(event) => {
-              const companyId = event.target.value;
-              setSelectedCompany(companyId);
-              setSelectedCompanyApplication('');
-              setCompanyFieldPayload(null);
-              setRecordTextValues({});
-              setRecordFiles({});
-              setStatusMessage('');
-              fetchCompanyApplications(companyId);
-            }}>
-              <option value="">Select company</option>
-              {data.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
-            </select>
-            <select className="select" value={selectedCompanyApplication} disabled={!selectedCompany || isFetchingCompanyApplications || !companyApplications.length} onChange={(event) => {
-              const applicationId = event.target.value;
-              setSelectedCompanyApplication(applicationId);
-              fetchCompanyFields(selectedCompany, applicationId);
-            }}>
-              <option value="">Select application</option>
-              {companyApplications.map((application) => <option key={application.id} value={application.id}>{application.name}</option>)}
-            </select>
-          </div>
+        {active === 'home' || active === 'upload' ? <div className="section-gap stack">
+          <Card className="stack company-info-controls-card">
+            <h2>Company Information</h2>
+            <div className="row">
+              <select className="select" value={selectedCompany} onChange={(event) => {
+                const companyId = event.target.value;
+                setSelectedCompany(companyId);
+                setSelectedCompanyApplication('');
+                setCompanyFieldPayload(null);
+                setRecordTextValues({});
+                setRecordFiles({});
+                setStatusMessage('');
+                fetchCompanyApplications(companyId);
+              }}>
+                <option value="">Select company</option>
+                {data.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+              </select>
+              <select className="select" value={selectedCompanyApplication} disabled={!selectedCompany || isFetchingCompanyApplications || !companyApplications.length} onChange={(event) => {
+                const applicationId = event.target.value;
+                setSelectedCompanyApplication(applicationId);
+                fetchCompanyFields(selectedCompany, applicationId);
+              }}>
+                <option value="">Select application</option>
+                {companyApplications.map((application) => <option key={application.id} value={application.id}>{application.name}</option>)}
+              </select>
+            </div>
 
-          {isFetchingCompanyApplications ? <p className="subtitle">Loading applications...</p> : null}
-          {selectedCompany && !isFetchingCompanyApplications && !companyApplications.length ? <p className="subtitle">No applications found for this company.</p> : null}
-          {selectedCompany && companyApplications.length > 0 && !selectedCompanyApplication ? <p className="subtitle">Select an application to view company information.</p> : null}
-          {isFetchingCompanyFields ? <p className="subtitle">Loading company information...</p> : null}
-          {selectedCompanyInfo && selectedCompanyApplication && !isFetchingCompanyFields && companyFieldPayload && !companyFieldPayload.hasData ? <p className="subtitle">No saved information exists for {selectedCompanyInfo.name} yet.</p> : null}
+            {isFetchingCompanyApplications ? <p className="subtitle">Loading applications...</p> : null}
+            {selectedCompany && !isFetchingCompanyApplications && !companyApplications.length ? <p className="subtitle">No applications found for this company.</p> : null}
+            {selectedCompany && companyApplications.length > 0 && !selectedCompanyApplication ? <p className="subtitle">Select an application to view company information.</p> : null}
+            {isFetchingCompanyFields ? <p className="subtitle">Loading company information...</p> : null}
+            {selectedCompanyInfo && selectedCompanyApplication && !isFetchingCompanyFields && companyFieldPayload && !companyFieldPayload.hasData ? <p className="subtitle">No saved information exists for {selectedCompanyInfo.name} yet.</p> : null}
+          </Card>
 
-          {companyFieldPayload?.applications?.map((application) => {
-            const createdDate = formatDateOnly(application.recordCreatedAt);
-            const updatedDate = formatDateOnly(application.recordUpdatedAt);
-            const hasMetadata = Boolean(createdDate || updatedDate);
-
-            return (
-              <div key={application.applicationId} className="stack">
-              <div>
-                <Badge>{application.applicationName}</Badge>
-                {hasMetadata ? (
-                  <div>
-                    {createdDate ? <p className="subtitle">Created: {createdDate}</p> : null}
-                    {updatedDate ? <p className="subtitle">Updated: {updatedDate}</p> : null}
-                  </div>
-                ) : null}
-              </div>
-              <GroupedFieldsView groupedFields={application.groupedFields || []} />
-              {(application.groupedFields || []).map((tagGroup) => {
-                const fieldsForTag = (application.fields || []).filter((field) => field.tagId === tagGroup.id);
-                if (!fieldsForTag.length) {
-                  return null;
-                }
+          <div className="company-info-layout">
+            <Card className="stack">
+              {companyFieldPayload?.applications?.map((application) => {
+                const createdDate = formatDateOnly(application.recordCreatedAt);
+                const updatedDate = formatDateOnly(application.recordUpdatedAt);
+                const hasMetadata = Boolean(createdDate || updatedDate);
 
                 return (
-                  <div key={`${application.applicationId}-${tagGroup.id}`} className="tag-section stack">
+                  <div key={application.applicationId} className="stack">
                     <div>
-                      <div className="tag-title-wrap">
-                        <h3 className="tag-title">{tagGroup.name}</h3>
-                        <span className="tag-scope">{tagGroup.scopeLabel}</span>
-                      </div>
-                      <div className="company-edit-tag-divider" />
-                    </div>
-
-                    {fieldsForTag.map((field) => {
-                      const existingValue = application.values?.[field.id];
-                      if (field.type === 'text' || field.type === 'link' || field.type === 'number') {
-                        return (
-                          <div key={field.id}>
-                            <strong>{field.name}</strong>
-                            <Input
-                              type={field.type === 'link' ? 'url' : field.type === 'number' ? 'number' : 'text'}
-                              placeholder={field.type === 'link' ? 'https://example.com' : ''}
-                              value={recordTextValues[field.id] || ''}
-                              onChange={(event) => setRecordTextValues((current) => ({ ...current, [field.id]: event.target.value }))}
-                            />
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div key={field.id} className="stack">
-                          <strong>{field.name}</strong>
-                          {existingValue?.url ? <a href={existingValue.url} target="_blank" rel="noopener noreferrer">Current file: {existingValue.originalname || existingValue.filename || 'Open file'}</a> : <p className="subtitle">No file uploaded yet.</p>}
-                          <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles((current) => ({ ...current, [field.id]: event.target.files?.[0] }))} />
+                      <Badge>{application.applicationName}</Badge>
+                      {hasMetadata ? (
+                        <div>
+                          {createdDate ? <p className="subtitle">Created: {createdDate}</p> : null}
+                          {updatedDate ? <p className="subtitle">Updated: {updatedDate}</p> : null}
                         </div>
-                      );
-                    })}
+                      ) : null}
+                    </div>
+                    <GroupedFieldsView groupedFields={application.groupedFields || []} />
                   </div>
                 );
               })}
-              </div>
-            );
-          })}
+            </Card>
 
-          <Button onClick={updateCompanyInformation} disabled={!selectedCompany || !selectedCompanyApplication || isFetchingCompanyFields}>Update Information</Button>
-        </Card></div> : null}
+            <Card className="stack company-edit-form-card">
+              {companyFieldPayload?.applications?.map((application) => (
+                <div key={`editable-${application.applicationId}`} className="stack">
+                  {(application.groupedFields || []).map((tagGroup) => {
+                    const fieldsForTag = (application.fields || []).filter((field) => field.tagId === tagGroup.id);
+                    if (!fieldsForTag.length) {
+                      return null;
+                    }
+
+                    return (
+                      <div key={`${application.applicationId}-${tagGroup.id}`} className="tag-section stack">
+                        <div>
+                          <div className="tag-title-wrap">
+                            <h3 className="tag-title">{tagGroup.name}</h3>
+                            <span className="tag-scope">{tagGroup.scopeLabel}</span>
+                          </div>
+                          <div className="company-edit-tag-divider" />
+                        </div>
+
+                        {fieldsForTag.map((field) => {
+                          const existingValue = application.values?.[field.id];
+                          if (field.type === 'text' || field.type === 'link' || field.type === 'number') {
+                            return (
+                              <div key={field.id}>
+                                <strong>{field.name}</strong>
+                                <Input
+                                  type={field.type === 'link' ? 'url' : field.type === 'number' ? 'number' : 'text'}
+                                  placeholder={field.type === 'link' ? 'https://example.com' : ''}
+                                  value={recordTextValues[field.id] || ''}
+                                  onChange={(event) => setRecordTextValues((current) => ({ ...current, [field.id]: event.target.value }))}
+                                />
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div key={field.id} className="stack">
+                              <strong>{field.name}</strong>
+                              {existingValue?.url ? <a href={existingValue.url} target="_blank" rel="noopener noreferrer">Current file: {existingValue.originalname || existingValue.filename || 'Open file'}</a> : <p className="subtitle">No file uploaded yet.</p>}
+                              <Input type="file" accept={field.type === 'pdf' ? 'application/pdf' : 'image/*'} onChange={(event) => setRecordFiles((current) => ({ ...current, [field.id]: event.target.files?.[0] }))} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+
+              <Button onClick={updateCompanyInformation} disabled={!selectedCompany || !selectedCompanyApplication || isFetchingCompanyFields}>Update Information</Button>
+            </Card>
+          </div>
+        </div> : null}
 
         {active === 'users' ? <div className="grid-2 section-gap">
           <Card className="stack">

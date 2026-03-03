@@ -38,7 +38,7 @@ export default function AdminPage() {
   const [appName, setAppName] = useState('');
   const [fieldForm, setFieldForm] = useState({ name: '', type: 'text', tagId: '' });
   const [userForm, setUserForm] = useState({ username: '', password: '' });
-  const [tagForm, setTagForm] = useState({ applicationId: '', name: '', description: '' });
+  const [tagForm, setTagForm] = useState({ scope: 'application', companyId: '', applicationId: '', name: '', description: '' });
   const [checkingSession, setCheckingSession] = useState(true);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -47,6 +47,7 @@ export default function AdminPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('');
   const [deletingUserId, setDeletingUserId] = useState('');
+  const [globalTagConfirmOpen, setGlobalTagConfirmOpen] = useState(false);
 
   useEffect(() => {
     const validateSession = async () => {
@@ -83,10 +84,19 @@ export default function AdminPage() {
     applications.forEach((application) => {
       (application.tags || []).forEach((tag) => {
         if (byId.has(tag.id)) return;
+        const scope = tag.scope || (tag.allApplications ? 'company' : 'application');
+        const scopeMeta = scope === 'global'
+          ? { label: '🌍 Global', applicationName: 'All Applications', companyName: 'All Companies' }
+          : scope === 'company'
+            ? { label: '🏢 Company', applicationName: 'All Applications', companyName: companyById[tag.companyId]?.name || application.companyName || 'Unknown Company' }
+            : { label: '🧩 Application', applicationName: application.name, companyName: companyById[tag.companyId]?.name || application.companyName || 'Unknown Company' };
+
         byId.set(tag.id, {
           ...tag,
-          applicationName: tag.allApplications ? 'All Applications' : application.name,
-          companyName: companyById[tag.companyId]?.name || application.companyName || 'Unknown Company'
+          scope,
+          scopeLabel: scopeMeta.label,
+          applicationName: scopeMeta.applicationName,
+          companyName: scopeMeta.companyName
         });
       });
     });
@@ -238,16 +248,39 @@ export default function AdminPage() {
     refresh();
   };
 
-  const createTag = async () => {
+  const createTag = async (confirmGlobal = false) => {
     setStatusMessage('');
-    const isAllApplications = tagForm.applicationId.startsWith('__all__::');
-    const selectedCompanyId = isAllApplications ? tagForm.applicationId.replace('__all__::', '') : (applications.find((application) => application.id === tagForm.applicationId)?.companyId || '');
-    const endpointId = isAllApplications ? 'all' : tagForm.applicationId;
+    const isGlobalScope = tagForm.scope === 'global';
+
+    if (isGlobalScope && !confirmGlobal) {
+      setGlobalTagConfirmOpen(true);
+      return;
+    }
+
+    if (tagForm.scope === 'company' && !tagForm.companyId) {
+      setStatusMessage('Please choose a company for company-scoped tags.');
+      return;
+    }
+
+    if (tagForm.scope === 'application' && !tagForm.applicationId) {
+      setStatusMessage('Please choose an application for application-scoped tags.');
+      return;
+    }
+
+    const endpointId = tagForm.scope === 'application' ? tagForm.applicationId : 'all';
+    const payloadBody = {
+      name: tagForm.name,
+      description: tagForm.description,
+      scope: tagForm.scope,
+      companyId: tagForm.scope === 'company' ? tagForm.companyId : undefined,
+      confirmGlobal: isGlobalScope ? confirmGlobal : undefined
+    };
+
     try {
       const response = await fetch(`/api/applications/${endpointId}/tags`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: tagForm.name, description: tagForm.description, companyId: selectedCompanyId })
+        body: JSON.stringify(payloadBody)
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -255,7 +288,8 @@ export default function AdminPage() {
         return;
       }
       setTagModal(false);
-      setTagForm({ applicationId: '', name: '', description: '' });
+      setGlobalTagConfirmOpen(false);
+      setTagForm({ scope: 'application', companyId: '', applicationId: '', name: '', description: '' });
       setStatusMessage('Tag successfully added.');
       refresh();
     } catch {
@@ -363,7 +397,7 @@ export default function AdminPage() {
     if (type === 'company') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Company' });
     if (type === 'application') setEditing({ open: true, type, id: row.id, payload: { name: row.name }, title: 'Edit Application' });
     if (type === 'field') setEditing({ open: true, type, id: row.id, payload: { name: row.name, tagId: row.tagId || '' }, title: 'Edit Field' });
-    if (type === 'tag') setEditing({ open: true, type, id: row.id, payload: { name: row.name, description: row.description || '', allApplications: Boolean(row.allApplications) }, title: 'Edit Tag' });
+    if (type === 'tag') setEditing({ open: true, type, id: row.id, payload: { name: row.name, description: row.description || '', scope: row.scope || (row.allApplications ? 'company' : 'application'), companyId: row.companyId || '', applicationId: row.applicationId || '' }, title: 'Edit Tag' });
     if (type === 'data') setEditing({ open: true, type, id: row.id, payload: { values: row.values || {} }, title: `Edit Record ${row.id}` });
     if (type === 'user') setEditing({ open: true, type, id: row.id, payload: { username: row.username, password: '' }, title: 'Edit User' });
   };
@@ -441,7 +475,7 @@ export default function AdminPage() {
     if (type === 'user' && !payload.password) delete payload.password;
     if (type === 'field' && payload.order === '') delete payload.order;
     if (type === 'field' && !payload.tagId) payload.tagId = '';
-
+    if (type === 'tag' && payload.scope === 'global') payload.confirmGlobal = true;
 
     if ((type === 'company' || type === 'application' || type === 'tag') && !String(payload.name || '').trim()) {
       setStatusMessage('Name is required.');
@@ -680,7 +714,7 @@ export default function AdminPage() {
             <h3 className="section-mini-gap">Tag Management</h3>
             {tagRows.map((tag) => (
               <div className="row" key={tag.id}>
-                <Badge>{tag.name} · {tag.applicationName} · {tag.companyName}{tag.allApplications ? ' · Global' : ''}</Badge>
+                <Badge>{tag.name} · {tag.scopeLabel} · {tag.applicationName} · {tag.companyName}</Badge>
                 <div className="row"><Button variant="secondary" onClick={() => openEdit('tag', tag)}>Edit</Button><Button variant="secondary" onClick={() => openDelete('tag', tag.id, tag.name)}>Delete</Button></div>
               </div>
             ))}
@@ -830,17 +864,37 @@ export default function AdminPage() {
       </Modal>
 
       <Modal open={tagModal} onClose={() => setTagModal(false)} title="Create Tag">
-        <select className="select" value={tagForm.applicationId} onChange={(event) => setTagForm((current) => ({ ...current, applicationId: event.target.value }))}>
-          <option value="">Select application</option>
-          {data.map((company) => [
-            <option key={`all-${company.id}`} value={`__all__::${company.id}`}>All Applications ({company.name})</option>,
-            ...company.applications.map((app) => <option key={app.id} value={app.id}>{app.name} ({company.name})</option>)
-          ])}
+        <select className="select" value={tagForm.scope} onChange={(event) => setTagForm((current) => ({ ...current, scope: event.target.value, companyId: '', applicationId: '' }))}>
+          <option value="application">Specific Application</option>
+          <option value="company">All Applications (within selected company)</option>
+          <option value="global">All Applications in All Companies</option>
         </select>
-        <p className="subtitle">Tip: All Applications creates a global tag for all current and future apps in that company.</p>
+
+        <select className="select" value={tagForm.companyId} disabled={tagForm.scope !== 'company'} onChange={(event) => setTagForm((current) => ({ ...current, companyId: event.target.value }))}>
+          <option value="">Select company</option>
+          {data.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+        </select>
+
+        <select className="select" value={tagForm.applicationId} disabled={tagForm.scope !== 'application'} onChange={(event) => setTagForm((current) => ({ ...current, applicationId: event.target.value }))}>
+          <option value="">Select application</option>
+          {data.map((company) => company.applications.map((app) => <option key={app.id} value={app.id}>{app.name} ({company.name})</option>))}
+        </select>
+
+        {tagForm.scope === 'global' ? <p className="error">This tag will be visible across the entire system.</p> : null}
+
         <Input placeholder="Tag name" value={tagForm.name} onChange={(event) => setTagForm((current) => ({ ...current, name: event.target.value }))} />
         <Input placeholder="Description (optional)" value={tagForm.description} onChange={(event) => setTagForm((current) => ({ ...current, description: event.target.value }))} />
-        <Button onClick={createTag} disabled={!tagForm.applicationId || !tagForm.name.trim()}>Create Tag</Button>
+        <Button onClick={() => createTag()} disabled={!tagForm.name.trim()}>Create Tag</Button>
+      </Modal>
+
+
+      <Modal open={globalTagConfirmOpen} onClose={() => setGlobalTagConfirmOpen(false)} title="Confirm Global Tag">
+        <p className="subtitle">This action will make the tag available in every current and future application across all companies.</p>
+        <p className="error">This tag will be visible across the entire system.</p>
+        <div className="row">
+          <Button variant="secondary" onClick={() => setGlobalTagConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={() => createTag(true)}>Confirm Global Tag</Button>
+        </div>
       </Modal>
 
       <Modal open={userModal} onClose={() => setUserModal(false)} title="Create Read-only User">
@@ -863,10 +917,12 @@ export default function AdminPage() {
         {editing.type === 'tag' ? <>
           <Input placeholder="Tag name" value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} />
           <Input placeholder="Description (optional)" value={editing.payload.description || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, description: event.target.value } }))} />
-          <label className="row" style={{ gap: '8px' }}>
-            <input type="checkbox" checked={Boolean(editing.payload.allApplications)} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, allApplications: event.target.checked } }))} />
-            All Applications (global tag)
-          </label>
+          <select className="select" value={editing.payload.scope || 'application'} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, scope: event.target.value } }))}>
+            <option value="application">🧩 Application</option>
+            <option value="company">🏢 Company</option>
+            <option value="global">🌍 Global</option>
+          </select>
+          {editing.payload.scope === 'global' ? <p className="error">This tag will be visible across the entire system.</p> : null}
         </> : null}
         {editing.type === 'user' ? <>
           <Input placeholder="Username" value={editing.payload.username || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, username: event.target.value } }))} />

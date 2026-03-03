@@ -84,6 +84,66 @@ function normalizeTagName(value) {
   return sanitizeText(value).toLowerCase();
 }
 
+const TAG_SCOPES = {
+  APPLICATION: 'application',
+  COMPANY: 'company',
+  GLOBAL: 'global'
+};
+
+function normalizeTagScope(scope) {
+  const value = sanitizeText(scope).toLowerCase();
+  if (Object.values(TAG_SCOPES).includes(value)) {
+    return value;
+  }
+  return '';
+}
+
+function resolveTagScope(tag = {}) {
+  const explicitScope = normalizeTagScope(tag.scope);
+  if (explicitScope) {
+    return explicitScope;
+  }
+  if (tag.allApplications === true) {
+    return TAG_SCOPES.COMPANY;
+  }
+  return TAG_SCOPES.APPLICATION;
+}
+
+function isTagVisibleForApplication(tag, application) {
+  const scope = resolveTagScope(tag);
+  if (scope === TAG_SCOPES.GLOBAL) {
+    return true;
+  }
+  if (!application) {
+    return false;
+  }
+  if (scope === TAG_SCOPES.COMPANY) {
+    return tag.companyId === application.companyId;
+  }
+  return tag.applicationId === application.id;
+}
+
+function normalizeTagEntity(tag, now = new Date().toISOString()) {
+  const scopedTag = { ...ensureTimestamps(tag, now) };
+  scopedTag.scope = resolveTagScope(scopedTag);
+
+  if (scopedTag.scope === TAG_SCOPES.GLOBAL) {
+    scopedTag.companyId = null;
+    scopedTag.applicationId = null;
+    scopedTag.allApplications = false;
+    return scopedTag;
+  }
+
+  if (scopedTag.scope === TAG_SCOPES.COMPANY) {
+    scopedTag.applicationId = null;
+    scopedTag.allApplications = true;
+    return scopedTag;
+  }
+
+  scopedTag.allApplications = false;
+  return scopedTag;
+}
+
 function isNonEmptyId(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -144,6 +204,7 @@ function ensureDefaultTag(db, application) {
     id: nextId('tag'),
     name: 'General',
     description: 'Default tag for ungrouped fields.',
+    scope: TAG_SCOPES.APPLICATION,
     applicationId: application.id,
     companyId: application.companyId,
     allApplications: false,
@@ -190,11 +251,26 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
 }
 
 function tagsForApplication(db, application) {
-  return (db.tags || []).filter((tag) => tag.applicationId === application.id || (tag.allApplications === true && tag.companyId === application.companyId));
+  return (db.tags || []).filter((tag) => isTagVisibleForApplication(tag, application));
 }
 
 function fieldsForApplication(db, application) {
-  return (db.fields || []).filter((field) => field.applicationId === application.id || (field.allApplications === true && field.companyId === application.companyId));
+  const visibleTags = tagsForApplication(db, application);
+  const visibleTagIds = new Set(visibleTags.map((tag) => tag.id));
+  const fieldById = new Map();
+
+  (db.fields || []).forEach((field) => {
+    const visibleByTag = field.tagId && visibleTagIds.has(field.tagId);
+    const visibleByLegacyScope = field.applicationId === application.id
+      || (field.allApplications === true && field.companyId === application.companyId)
+      || (field.scope === TAG_SCOPES.GLOBAL);
+
+    if (visibleByTag || visibleByLegacyScope) {
+      fieldById.set(field.id, field);
+    }
+  });
+
+  return Array.from(fieldById.values());
 }
 
 function getConsolidatedRecord(records = []) {
@@ -245,8 +321,12 @@ app.prepare().then(() => {
     if (!Array.isArray(db.tags)) {
       db.tags = [];
     }
-    db.tags = db.tags.map((tag) => ({ ...ensureTimestamps(tag, now), allApplications: tag.allApplications === true }));
-    db.fields = (db.fields || []).map((field) => ({ ...field, allApplications: field.allApplications === true }));
+    db.tags = db.tags.map((tag) => normalizeTagEntity(tag, now));
+    db.fields = (db.fields || []).map((field) => ({
+      ...field,
+      allApplications: field.allApplications === true,
+      scope: normalizeTagScope(field.scope) || (field.allApplications === true ? TAG_SCOPES.COMPANY : TAG_SCOPES.APPLICATION)
+    }));
 
     return db;
   });
@@ -409,6 +489,7 @@ app.prepare().then(() => {
       id: nextId('tag'),
       name: 'General',
       description: 'Default tag for ungrouped fields.',
+      scope: TAG_SCOPES.APPLICATION,
       applicationId: application.id,
       companyId,
       allApplications: false,
@@ -445,38 +526,58 @@ app.prepare().then(() => {
     const { applicationId } = req.params;
     const nextName = sanitizeText(req.body?.name);
     const nextDescription = sanitizeText(req.body?.description);
+    const bodyScope = normalizeTagScope(req.body?.scope);
     const companyIdFromBody = sanitizeText(req.body?.companyId);
-    const isAllApplications = applicationId === 'all';
+    const isLegacyAllApplications = applicationId === 'all';
+    const requestedScope = bodyScope || (isLegacyAllApplications ? TAG_SCOPES.COMPANY : TAG_SCOPES.APPLICATION);
     const db = readDb();
-    const application = isAllApplications ? null : db.applications.find((entry) => entry.id === applicationId);
-    const companyId = isAllApplications ? companyIdFromBody : application?.companyId;
-
-    if (!companyId) {
-      res.status(400).json({ error: 'Company is required' });
-      return;
-    }
-
-    if (!db.companies.find((entry) => entry.id === companyId)) {
-      res.status(404).json({ error: 'Company not found' });
-      return;
-    }
-
-    if (!isAllApplications && !application) {
-      res.status(404).json({ error: 'Application not found' });
-      return;
-    }
+    const application = requestedScope === TAG_SCOPES.APPLICATION ? db.applications.find((entry) => entry.id === applicationId) : null;
+    const companyId = requestedScope === TAG_SCOPES.APPLICATION
+      ? application?.companyId
+      : (requestedScope === TAG_SCOPES.COMPANY ? companyIdFromBody : null);
 
     if (!nextName) {
       res.status(400).json({ error: 'Tag name is required' });
       return;
     }
 
-    const duplicate = db.tags.find((tag) => tag.companyId === companyId
-      && tag.allApplications === isAllApplications
-      && (isAllApplications || tag.applicationId === applicationId)
-      && normalizeTagName(tag.name) === normalizeTagName(nextName));
+    if (!Object.values(TAG_SCOPES).includes(requestedScope)) {
+      res.status(400).json({ error: 'Invalid tag scope' });
+      return;
+    }
+
+    if (requestedScope === TAG_SCOPES.APPLICATION && !application) {
+      res.status(404).json({ error: 'Application not found' });
+      return;
+    }
+
+    if (requestedScope === TAG_SCOPES.COMPANY) {
+      if (!companyId) {
+        res.status(400).json({ error: 'Company is required for company scope tags' });
+        return;
+      }
+      if (!db.companies.find((entry) => entry.id === companyId)) {
+        res.status(404).json({ error: 'Company not found' });
+        return;
+      }
+    }
+
+    if (requestedScope === TAG_SCOPES.GLOBAL && req.body?.confirmGlobal !== true) {
+      res.status(400).json({ error: 'Global tag creation requires explicit confirmation' });
+      return;
+    }
+
+    const duplicate = (db.tags || []).find((entry) => {
+      if (normalizeTagName(entry.name) !== normalizeTagName(nextName)) return false;
+      const scope = resolveTagScope(entry);
+      if (scope !== requestedScope) return false;
+      if (scope === TAG_SCOPES.APPLICATION) return entry.applicationId === application.id;
+      if (scope === TAG_SCOPES.COMPANY) return entry.companyId === companyId;
+      return true;
+    });
+
     if (duplicate) {
-      res.status(409).json({ error: isAllApplications ? 'Tag name already exists for all applications in this company' : 'Tag name already exists in this application' });
+      res.status(409).json({ error: 'Tag name already exists in this scope' });
       return;
     }
 
@@ -485,9 +586,10 @@ app.prepare().then(() => {
       id: nextId('tag'),
       name: nextName,
       description: nextDescription,
-      applicationId: isAllApplications ? null : applicationId,
-      companyId,
-      allApplications: isAllApplications,
+      scope: requestedScope,
+      applicationId: requestedScope === TAG_SCOPES.APPLICATION ? application.id : null,
+      companyId: requestedScope === TAG_SCOPES.COMPANY ? companyId : (requestedScope === TAG_SCOPES.APPLICATION ? application.companyId : null),
+      allApplications: requestedScope === TAG_SCOPES.COMPANY,
       createdAt: now,
       updatedAt: now
     };
@@ -504,7 +606,6 @@ app.prepare().then(() => {
     const id = sanitizeText(req.params.id);
     const nextName = sanitizeText(req.body?.name);
     const nextDescription = sanitizeText(req.body?.description);
-    const nextAllApplications = req.body?.allApplications === true;
     const db = readDb();
     const tag = (db.tags || []).find((entry) => entry.id === id);
 
@@ -518,11 +619,44 @@ app.prepare().then(() => {
       return;
     }
 
-    const duplicate = (db.tags || []).find((entry) => entry.companyId === tag.companyId
-      && entry.id !== id
-      && entry.allApplications === nextAllApplications
-      && (nextAllApplications || entry.applicationId === tag.applicationId)
-      && normalizeTagName(entry.name) === normalizeTagName(nextName));
+    const requestedScope = normalizeTagScope(req.body?.scope)
+      || (req.body?.allApplications === true ? TAG_SCOPES.COMPANY : resolveTagScope(tag));
+    const nextCompanyId = requestedScope === TAG_SCOPES.COMPANY
+      ? sanitizeText(req.body?.companyId) || tag.companyId
+      : (requestedScope === TAG_SCOPES.APPLICATION ? tag.companyId : null);
+    const nextApplicationId = requestedScope === TAG_SCOPES.APPLICATION
+      ? (sanitizeText(req.body?.applicationId) || tag.applicationId)
+      : null;
+
+    if (!Object.values(TAG_SCOPES).includes(requestedScope)) {
+      res.status(400).json({ error: 'Invalid tag scope' });
+      return;
+    }
+
+    if (requestedScope === TAG_SCOPES.APPLICATION && !db.applications.find((entry) => entry.id === nextApplicationId)) {
+      res.status(400).json({ error: 'Valid applicationId is required for application scope tags' });
+      return;
+    }
+
+    if (requestedScope === TAG_SCOPES.COMPANY && !db.companies.find((entry) => entry.id === nextCompanyId)) {
+      res.status(400).json({ error: 'Valid companyId is required for company scope tags' });
+      return;
+    }
+
+    if (requestedScope === TAG_SCOPES.GLOBAL && req.body?.confirmGlobal !== true) {
+      res.status(400).json({ error: 'Global tag update requires explicit confirmation' });
+      return;
+    }
+
+    const duplicate = (db.tags || []).find((entry) => {
+      if (entry.id === id || normalizeTagName(entry.name) !== normalizeTagName(nextName)) return false;
+      const scope = resolveTagScope(entry);
+      if (scope !== requestedScope) return false;
+      if (scope === TAG_SCOPES.APPLICATION) return entry.applicationId === nextApplicationId;
+      if (scope === TAG_SCOPES.COMPANY) return entry.companyId === nextCompanyId;
+      return true;
+    });
+
     if (duplicate) {
       res.status(409).json({ error: 'Tag name already exists in this scope' });
       return;
@@ -530,24 +664,36 @@ app.prepare().then(() => {
 
     tag.name = nextName;
     tag.description = nextDescription;
-    tag.allApplications = nextAllApplications;
-    if (nextAllApplications) {
-      tag.applicationId = null;
-    } else if (!tag.applicationId) {
-      const fallbackApplication = db.applications.find((entry) => entry.companyId === tag.companyId);
-      tag.applicationId = fallbackApplication?.id || null;
-    }
+    tag.scope = requestedScope;
+    tag.allApplications = requestedScope === TAG_SCOPES.COMPANY;
+    tag.companyId = requestedScope === TAG_SCOPES.GLOBAL ? null : nextCompanyId;
+    tag.applicationId = requestedScope === TAG_SCOPES.APPLICATION ? nextApplicationId : null;
     tag.updatedAt = new Date().toISOString();
 
     db.fields = db.fields.map((field) => {
       if (field.tagId !== tag.id) return field;
-      const updatedField = { ...field, tagName: tag.name, allApplications: nextAllApplications };
-      if (nextAllApplications) {
+      const updatedField = {
+        ...field,
+        tagName: tag.name,
+        scope: requestedScope,
+        allApplications: requestedScope === TAG_SCOPES.COMPANY
+      };
+
+      if (requestedScope === TAG_SCOPES.APPLICATION) {
+        updatedField.applicationId = tag.applicationId;
+        updatedField.companyId = tag.companyId;
+      }
+
+      if (requestedScope === TAG_SCOPES.COMPANY) {
         updatedField.applicationId = null;
         updatedField.companyId = tag.companyId;
-      } else if (!updatedField.applicationId) {
-        updatedField.applicationId = tag.applicationId;
       }
+
+      if (requestedScope === TAG_SCOPES.GLOBAL) {
+        updatedField.applicationId = null;
+        updatedField.companyId = null;
+      }
+
       return updatedField;
     });
 
@@ -629,7 +775,8 @@ app.prepare().then(() => {
         if (!sameName) return false;
         if (field.applicationId === targetApplicationId) return true;
         const targetApplication = appById.get(targetApplicationId);
-        return field.allApplications === true && field.companyId === targetApplication?.companyId;
+        return (field.allApplications === true && field.companyId === targetApplication?.companyId)
+          || field.scope === TAG_SCOPES.GLOBAL;
       });
       if (duplicate) {
         duplicateEntries.push({
@@ -645,11 +792,11 @@ app.prepare().then(() => {
 
       if (tagId && applicationId !== 'all') {
         selectedTag = db.tags.find((entry) => entry.id === sanitizeText(tagId)
-          && (entry.applicationId === targetApplicationId || (entry.allApplications === true && entry.companyId === application.companyId)));
+          && isTagVisibleForApplication(entry, application));
       }
 
       if (!selectedTag && tagName) {
-        selectedTag = db.tags.find((entry) => (entry.applicationId === targetApplicationId || (entry.allApplications === true && entry.companyId === application.companyId))
+        selectedTag = db.tags.find((entry) => isTagVisibleForApplication(entry, application)
           && normalizeTagName(entry.name) === normalizeTagName(tagName));
       }
 
@@ -657,11 +804,13 @@ app.prepare().then(() => {
         selectedTag = ensureDefaultTag(db, application);
       }
 
+      const tagScope = resolveTagScope(selectedTag);
       fieldsToCreate.push({
         id: nextId('fld'),
-        applicationId: selectedTag.allApplications ? null : targetApplicationId,
-        companyId: application.companyId,
-        allApplications: selectedTag.allApplications === true,
+        applicationId: tagScope === TAG_SCOPES.APPLICATION ? targetApplicationId : null,
+        companyId: tagScope === TAG_SCOPES.GLOBAL ? null : application.companyId,
+        allApplications: tagScope === TAG_SCOPES.COMPANY,
+        scope: tagScope,
         name: nextName,
         type,
         tagId: selectedTag.id,
@@ -770,8 +919,7 @@ app.prepare().then(() => {
     const companyApplications = db.applications.filter((application) => application.companyId === id);
     const applicationsPayload = companyApplications.map((application) => {
       const applicationTags = tagsForApplication(db, application);
-      const applicationFields = db.fields
-        .filter((field) => field.applicationId === application.id || (field.allApplications === true && field.companyId === application.companyId))
+      const applicationFields = fieldsForApplication(db, application)
         .map((field) => {
           const matchedTag = applicationTags.find((tag) => tag.id === field.tagId);
           return {
@@ -1003,20 +1151,32 @@ app.prepare().then(() => {
         const defaultTag = application ? ensureDefaultTag(db, application) : null;
         field.tagId = defaultTag?.id || null;
         field.tagName = defaultTag?.name || 'General';
+        field.scope = TAG_SCOPES.APPLICATION;
+        field.allApplications = false;
       } else {
         const fieldApplication = db.applications.find((entry) => entry.id === field.applicationId) || db.applications.find((entry) => entry.companyId === field.companyId);
         const matchedTag = db.tags.find((tag) => tag.id === nextTagId
-          && (tag.applicationId === field.applicationId || (tag.allApplications === true && tag.companyId === fieldApplication?.companyId)));
+          && isTagVisibleForApplication(tag, fieldApplication));
         if (!matchedTag) {
           res.status(400).json({ error: 'Tag not found for this application' });
           return;
         }
+        const tagScope = resolveTagScope(matchedTag);
         field.tagId = matchedTag.id;
         field.tagName = matchedTag.name;
-        field.allApplications = matchedTag.allApplications === true;
-        if (matchedTag.allApplications === true) {
+        field.scope = tagScope;
+        field.allApplications = tagScope === TAG_SCOPES.COMPANY;
+        if (tagScope === TAG_SCOPES.APPLICATION) {
+          field.applicationId = fieldApplication?.id || field.applicationId;
+          field.companyId = fieldApplication?.companyId || field.companyId;
+        }
+        if (tagScope === TAG_SCOPES.COMPANY) {
           field.applicationId = null;
           field.companyId = matchedTag.companyId;
+        }
+        if (tagScope === TAG_SCOPES.GLOBAL) {
+          field.applicationId = null;
+          field.companyId = null;
         }
       }
     }

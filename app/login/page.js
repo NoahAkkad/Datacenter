@@ -80,57 +80,41 @@ function LoginContent() {
   const isAdmin = portal === 'admin';
 
   return (
-    <main className="page-center">
-      <div className="auth-wrap fade-in">
-        <Card className="stack">
+    <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10">
+      <div className="w-full max-w-md">
+        <Card className="space-y-6">
           <div>
-            <h1 className="login-title">{isAdmin ? '🛡️ Admin Portal Login' : '👤 User Portal Login'}</h1>
-            <p className="subtitle">Welcome back. Sign in to continue.</p>
+            <h1 className="text-2xl font-semibold text-slate-900">{isAdmin ? 'Admin Portal Login' : 'User Portal Login'}</h1>
+            <p className="mt-1 text-sm text-slate-500">Welcome back. Sign in to continue.</p>
           </div>
 
-          <div className="pill-switch">
-            <button className={isAdmin ? 'active' : ''} onClick={() => router.push('/login?portal=admin')}>Admin</button>
-            <button className={!isAdmin ? 'active' : ''} onClick={() => router.push('/login?portal=user')}>User</button>
+          <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
+            <button className={`rounded-md px-3 py-2 text-sm font-medium transition ${isAdmin ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`} onClick={() => router.push('/login?portal=admin')}>Admin</button>
+            <button className={`rounded-md px-3 py-2 text-sm font-medium transition ${!isAdmin ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`} onClick={() => router.push('/login?portal=user')}>User</button>
           </div>
 
-          <form className="stack" onSubmit={onSubmit}>
+          <form className="space-y-4" onSubmit={onSubmit}>
             <div className="username-autocomplete">
-              <Input
-                required
-                placeholder="Username"
-                value={form.username}
-                autoComplete="username"
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 120)}
-                onChange={(event) => {
-                  setForm({ ...form, username: event.target.value });
-                  setShowSuggestions(true);
-                }}
-              />
-
+              <Input required placeholder="Username" value={form.username} autoComplete="username" onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 120)} onChange={(event) => {
+                setForm({ ...form, username: event.target.value });
+                setShowSuggestions(true);
+              }} />
               {showSuggestions && suggestions.length > 0 && (
                 <ul className="username-suggestions" role="listbox" aria-label="Previous usernames">
                   {suggestions.map((user) => (
                     <li key={user}>
-                      <button
-                        type="button"
-                        className="username-suggestion-btn"
-                        onMouseDown={() => {
-                          setForm((current) => ({ ...current, username: user }));
-                          setShowSuggestions(false);
-                        }}
-                      >
-                        {user}
-                      </button>
+                      <button type="button" className="username-suggestion-btn" onMouseDown={() => {
+                        setForm((current) => ({ ...current, username: user }));
+                        setShowSuggestions(false);
+                      }}>{user}</button>
                     </li>
                   ))}
                 </ul>
               )}
-
             </div>
             <Input required type="password" placeholder="Password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
-            {error && <p className="error">{error}</p>}
-            <Button type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</Button>
+            {error && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">{error}</p>}
+            <Button type="submit" className="w-full" disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</Button>
           </form>
         </Card>
       </div>
@@ -140,7 +124,7 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<main className="page-center"><p>Loading login...</p></main>}>
+    <Suspense fallback={<main className="flex min-h-screen items-center justify-center">Loading login...</main>}>
       <LoginContent />
     </Suspense>
   );

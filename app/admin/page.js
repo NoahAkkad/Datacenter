@@ -152,7 +152,7 @@ export default function AdminPage() {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
     const applicationId = params.get('applicationId') || '';
-    const allowedTabs = ['home', 'companies', 'applications', 'fields', 'users', 'upload'];
+    const allowedTabs = ['home', 'companies', 'applications', 'tags', 'fields', 'records', 'settings', 'users', 'upload'];
     setActive(allowedTabs.includes(tab) ? tab : 'home');
     setSelectedApp(applicationId);
   }, []);
@@ -646,12 +646,18 @@ export default function AdminPage() {
             <h1 className="login-title">Admin Dashboard</h1>
             <p className="subtitle">Structured management for all data center entities.</p>
           </div>
-          <div className="profile">
-            <button className="profile-trigger" onClick={() => setProfileMenuOpen((value) => !value)}>
-              <strong>Administrator</strong>
-              <p className="subtitle">admin@datacenter.io</p>
-            </button>
-            {profileMenuOpen ? <div className="profile-menu"><button className="menu-item danger" onClick={() => setLogoutConfirmOpen(true)}>Logout</button></div> : null}
+          <div className="row">
+            <div className="search-box">
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search companies" />
+            </div>
+            <button className="button secondary" type="button">🔔</button>
+            <div className="profile">
+              <button className="profile-trigger" onClick={() => setProfileMenuOpen((value) => !value)}>
+                <strong>Administrator</strong>
+                <p className="subtitle">admin@datacenter.io</p>
+              </button>
+              {profileMenuOpen ? <div className="profile-menu"><button className="menu-item danger" onClick={() => setLogoutConfirmOpen(true)}>Logout</button></div> : null}
+            </div>
           </div>
         </header>
 
@@ -659,7 +665,6 @@ export default function AdminPage() {
 
         <Card>
           <div className="row">
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search companies" />
             <Button onClick={() => setCompanyModal(true)}>New Company</Button>
             <Button variant="secondary" onClick={() => setAppModal(true)}>New Application</Button>
             <Button variant="secondary" onClick={() => setFieldModal(true)}>New Field</Button>
@@ -702,8 +707,8 @@ export default function AdminPage() {
           </Card> : null}
         </div> : null}
 
-        {active === 'home' || active === 'applications' || active === 'fields' ? <div className="grid-2 section-gap">
-          {active === 'home' || active === 'fields' ? <Card className="stack">
+        {active === 'home' || active === 'applications' || active === 'fields' || active === 'tags' ? <div className="grid-2 section-gap">
+          {active === 'home' || active === 'fields' || active === 'tags' ? <Card className="stack">
             <h2>Dynamic Fields Management</h2>
             {fields.map((field) => (
               <div className="row" key={field.id}>
@@ -719,7 +724,7 @@ export default function AdminPage() {
               </div>
             ))}
           </Card> : null}
-          {active === 'home' || active === 'applications' ? <Card className="stack">
+          {active === 'home' || active === 'applications' || active === 'records' ? <Card className="stack">
             <h2>Applications Management</h2>
             <DataTable
               columns={[
@@ -736,7 +741,7 @@ export default function AdminPage() {
               data={applications}
             />
 
-            {active === 'applications' ? <>
+            {active === 'applications' || active === 'records' ? <>
               <h2 className="section-mini-gap">{selectedApplication?.name ? `${selectedApplication.name} Records` : 'Application Records'}</h2>
               <DataTable
                 columns={[
@@ -754,7 +759,7 @@ export default function AdminPage() {
           </Card> : null}
         </div> : null}
 
-        {active === 'home' || active === 'upload' ? <div className="grid-2 section-gap"><Card className="stack">
+        {active === 'home' || active === 'upload' || active === 'settings' ? <div className="grid-2 section-gap"><Card className="stack">
           <h2>Company Information</h2>
           <select className="select" value={selectedCompany} onChange={(event) => {
             const companyId = event.target.value;
@@ -798,7 +803,7 @@ export default function AdminPage() {
           <Button onClick={updateCompanyInformation} disabled={!selectedCompany || isFetchingCompanyFields}>Update Information</Button>
         </Card></div> : null}
 
-        {active === 'users' ? <div className="grid-2 section-gap">
+        {active === 'users' || active === 'settings' ? <div className="grid-2 section-gap">
           <Card className="stack">
             <h2>User Management</h2>
             <p className="subtitle">Create and manage normal users.</p>

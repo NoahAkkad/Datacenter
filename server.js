@@ -194,7 +194,8 @@ function ensureDefaultTag(db, application) {
     db.tags = [];
   }
 
-  const existingDefault = db.tags.find((tag) => tag.applicationId === application.id && normalizeTagName(tag.name) === 'general');
+  const existingDefault = db.tags.find((tag) => tag.applicationId === application.id
+    && ['general', 'uncategorized'].includes(normalizeTagName(tag.name)));
   if (existingDefault) {
     return existingDefault;
   }
@@ -202,8 +203,8 @@ function ensureDefaultTag(db, application) {
   const now = new Date().toISOString();
   const fallbackTag = {
     id: nextId('tag'),
-    name: 'General',
-    description: 'Default tag for ungrouped fields.',
+    name: 'Uncategorized',
+    description: 'Default tag for fields without an explicit category.',
     scope: TAG_SCOPES.APPLICATION,
     applicationId: application.id,
     companyId: application.companyId,
@@ -223,7 +224,7 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
     .map((field) => {
       const rawValue = recordValues[field.id];
       const matchedTag = tagById.get(field.tagId) || null;
-      const tagLabel = matchedTag?.name || field.tagName || 'General';
+      const tagLabel = matchedTag?.name || field.tagName || 'Uncategorized';
 
       if (field.type === 'text') {
         return {
@@ -322,11 +323,33 @@ app.prepare().then(() => {
       db.tags = [];
     }
     db.tags = db.tags.map((tag) => normalizeTagEntity(tag, now));
-    db.fields = (db.fields || []).map((field) => ({
-      ...field,
-      allApplications: field.allApplications === true,
-      scope: normalizeTagScope(field.scope) || (field.allApplications === true ? TAG_SCOPES.COMPANY : TAG_SCOPES.APPLICATION)
-    }));
+    db.fields = (db.fields || []).map((field) => {
+      const normalizedField = {
+        ...field,
+        allApplications: field.allApplications === true,
+        scope: normalizeTagScope(field.scope) || (field.allApplications === true ? TAG_SCOPES.COMPANY : TAG_SCOPES.APPLICATION)
+      };
+
+      if (normalizedField.tagId) {
+        const matchedTag = db.tags.find((tag) => tag.id === normalizedField.tagId);
+        if (matchedTag) {
+          normalizedField.tagName = matchedTag.name;
+          return normalizedField;
+        }
+      }
+
+      const fallbackApplication = db.applications.find((entry) => entry.id === normalizedField.applicationId)
+        || db.applications.find((entry) => entry.companyId === normalizedField.companyId);
+      const fallbackTag = fallbackApplication ? ensureDefaultTag(db, fallbackApplication) : null;
+      normalizedField.tagId = fallbackTag?.id || null;
+      normalizedField.tagName = fallbackTag?.name || 'Uncategorized';
+      normalizedField.scope = TAG_SCOPES.APPLICATION;
+      normalizedField.allApplications = false;
+      normalizedField.applicationId = fallbackApplication?.id || normalizedField.applicationId || null;
+      normalizedField.companyId = fallbackApplication?.companyId || normalizedField.companyId || null;
+
+      return normalizedField;
+    });
 
     return db;
   });
@@ -438,7 +461,7 @@ app.prepare().then(() => {
     }];
 
     const groupedFields = normalizedFields.reduce((accumulator, field) => {
-      const groupName = field.tagName || 'General';
+      const groupName = field.tagName || 'Uncategorized';
       if (!accumulator[groupName]) {
         accumulator[groupName] = [];
       }
@@ -487,8 +510,8 @@ app.prepare().then(() => {
     const application = { id: nextId('app'), companyId, name, createdAt: now, updatedAt: now };
     const defaultTag = {
       id: nextId('tag'),
-      name: 'General',
-      description: 'Default tag for ungrouped fields.',
+      name: 'Uncategorized',
+      description: 'Default tag for fields without an explicit category.',
       scope: TAG_SCOPES.APPLICATION,
       applicationId: application.id,
       companyId,
@@ -712,20 +735,13 @@ app.prepare().then(() => {
     }
 
     const linkedFields = db.fields.filter((field) => field.tagId === tag.id);
-
-    linkedFields.forEach((field) => {
-      const fieldApplication = db.applications.find((entry) => entry.id === field.applicationId) || db.applications.find((entry) => entry.companyId === tag.companyId);
-      const fallbackTag = fieldApplication ? ensureDefaultTag(db, fieldApplication) : null;
-      if (fallbackTag && fallbackTag.id !== tag.id) {
-        field.tagId = fallbackTag.id;
-        field.tagName = fallbackTag.name;
-        field.allApplications = false;
-      } else {
-        field.tagId = null;
-        field.tagName = 'General';
-        field.allApplications = false;
-      }
-    });
+    if (linkedFields.length > 0) {
+      res.status(409).json({
+        error: 'Tag cannot be deleted while fields are attached. Reassign fields first.',
+        linkedFieldCount: linkedFields.length
+      });
+      return;
+    }
 
     db.tags = db.tags.filter((entry) => entry.id !== id);
     writeDb(db);
@@ -769,7 +785,7 @@ app.prepare().then(() => {
     const duplicateEntries = [];
     const fieldsToCreate = [];
 
-    targetApplicationIds.forEach((targetApplicationId) => {
+    for (const targetApplicationId of targetApplicationIds) {
       const duplicate = db.fields.find((field) => {
         const sameName = normalizeFieldName(field.name) === normalizeFieldName(nextName);
         if (!sameName) return false;
@@ -784,13 +800,13 @@ app.prepare().then(() => {
           fieldId: duplicate.id,
           fieldName: duplicate.name
         });
-        return;
+        continue;
       }
 
       const application = appById.get(targetApplicationId);
       let selectedTag = null;
 
-      if (tagId && applicationId !== 'all') {
+      if (tagId) {
         selectedTag = db.tags.find((entry) => entry.id === sanitizeText(tagId)
           && isTagVisibleForApplication(entry, application));
       }
@@ -801,7 +817,8 @@ app.prepare().then(() => {
       }
 
       if (!selectedTag) {
-        selectedTag = ensureDefaultTag(db, application);
+        res.status(400).json({ error: 'A valid tag selection is required for field creation' });
+        return;
       }
 
       const tagScope = resolveTagScope(selectedTag);
@@ -817,7 +834,7 @@ app.prepare().then(() => {
         tagName: selectedTag.name,
         createdAt
       });
-    });
+    }
 
     if (duplicateEntries.length > 0) {
       res.status(409).json({
@@ -925,7 +942,7 @@ app.prepare().then(() => {
           return {
             ...field,
             tagId: matchedTag?.id || field.tagId || null,
-            tagName: matchedTag?.name || field.tagName || 'General'
+            tagName: matchedTag?.name || field.tagName || 'Uncategorized'
           };
         });
       const latestRecord = db.records
@@ -1147,12 +1164,8 @@ app.prepare().then(() => {
     if (req.body?.tagId !== undefined) {
       const nextTagId = sanitizeText(req.body.tagId);
       if (!nextTagId) {
-        const application = db.applications.find((entry) => entry.id === field.applicationId);
-        const defaultTag = application ? ensureDefaultTag(db, application) : null;
-        field.tagId = defaultTag?.id || null;
-        field.tagName = defaultTag?.name || 'General';
-        field.scope = TAG_SCOPES.APPLICATION;
-        field.allApplications = false;
+        res.status(400).json({ error: 'tagId is required' });
+        return;
       } else {
         const fieldApplication = db.applications.find((entry) => entry.id === field.applicationId) || db.applications.find((entry) => entry.companyId === field.companyId);
         const matchedTag = db.tags.find((tag) => tag.id === nextTagId

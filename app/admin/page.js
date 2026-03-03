@@ -12,7 +12,7 @@ import { AdminSidebar } from '../../components/AdminSidebar';
 import { GroupedFieldsView } from '../../components/GroupedFieldsView';
 import { formatDateOnly } from '../../lib/formatDate';
 import { useAuth } from '../../components/AuthProvider';
-import { HeaderProfile } from '../../components/HeaderProfile';
+import { HeaderMenu } from '../../components/HeaderMenu';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -51,8 +51,7 @@ export default function AdminPage() {
   const [userForm, setUserForm] = useState({ username: '', email: '', password: '' });
   const [tagForm, setTagForm] = useState({ scope: 'application', companyId: '', applicationId: '', name: '', description: '', presetKey: '' });
   const [tagPresetOptions, setTagPresetOptions] = useState([]);
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -296,8 +295,6 @@ export default function AdminPage() {
       window.sessionStorage.removeItem('authToken');
       clearUser();
       setIsLoggingOut(false);
-      setLogoutConfirmOpen(false);
-      setProfileMenuOpen(false);
       router.replace('/login?portal=admin');
       router.refresh();
     }
@@ -827,10 +824,7 @@ export default function AdminPage() {
             <h1 className="login-title">Admin Dashboard</h1>
             <p className="subtitle">Structured management for all data center entities.</p>
           </div>
-          <div className="profile">
-            <HeaderProfile user={currentUserProfile} loading={authLoading} onClick={() => setProfileMenuOpen((value) => !value)} />
-            {profileMenuOpen ? <div className="profile-menu"><button className="menu-item danger" onClick={() => setLogoutConfirmOpen(true)}>Logout</button></div> : null}
-          </div>
+          <HeaderMenu onLogout={onLogout} loggingOut={isLoggingOut} />
         </header>
 
         {statusMessage ? <p className="error">{statusMessage}</p> : null}
@@ -1277,13 +1271,6 @@ export default function AdminPage() {
         </div>
       </Modal>
 
-      <Modal open={logoutConfirmOpen} onClose={() => !isLoggingOut && setLogoutConfirmOpen(false)} title="Confirm Logout">
-        <p className="subtitle">Are you sure you want to logout from the admin dashboard?</p>
-        <div className="row">
-          <Button variant="secondary" onClick={() => setLogoutConfirmOpen(false)} disabled={isLoggingOut}>Cancel</Button>
-          <Button onClick={onLogout} disabled={isLoggingOut}>{isLoggingOut ? 'Logging out...' : 'Logout'}</Button>
-        </div>
-      </Modal>
     </main>
   );
 }

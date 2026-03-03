@@ -5,10 +5,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { Modal } from '../../components/ui/modal';
 import { UserSidebar } from '../../components/UserSidebar';
 import { useAuth } from '../../components/AuthProvider';
-import { HeaderProfile } from '../../components/HeaderProfile';
+import { HeaderMenu } from '../../components/HeaderMenu';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -18,7 +17,6 @@ export default function DashboardPage() {
   const [loadingApplications, setLoadingApplications] = useState(false);
   const [applications, setApplications] = useState([]);
   const [applicationsError, setApplicationsError] = useState('');
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
@@ -70,7 +68,6 @@ export default function DashboardPage() {
       window.sessionStorage.removeItem('authToken');
       clearUser();
       setIsLoggingOut(false);
-      setLogoutConfirmOpen(false);
       router.replace('/login?portal=user');
       router.refresh();
     }
@@ -99,9 +96,7 @@ export default function DashboardPage() {
             <h1 className="title">User Dashboard</h1>
             <p className="subtitle">Browse applications and open details.</p>
           </div>
-          <div className="profile">
-            <HeaderProfile user={user} loading={authLoading} onClick={() => setLogoutConfirmOpen(true)} />
-          </div>
+          <HeaderMenu onLogout={onLogout} loggingOut={isLoggingOut} />
         </header>
 
         {applicationsError ? <Card className="error">{applicationsError}</Card> : null}
@@ -136,13 +131,6 @@ export default function DashboardPage() {
         )}
       </section>
 
-      <Modal open={logoutConfirmOpen} onClose={() => !isLoggingOut && setLogoutConfirmOpen(false)} title="Confirm Logout">
-        <p className="subtitle">Are you sure you want to logout?</p>
-        <div className="row">
-          <Button variant="secondary" onClick={() => setLogoutConfirmOpen(false)} disabled={isLoggingOut}>Cancel</Button>
-          <Button onClick={onLogout} disabled={isLoggingOut}>{isLoggingOut ? 'Logging out...' : 'Logout'}</Button>
-        </div>
-      </Modal>
     </main>
   );
 }

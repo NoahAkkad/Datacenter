@@ -165,7 +165,18 @@ th { background: #f8fafc; font-size: 12px; text-transform: uppercase; color: #64
 .company-edit-tag-divider{height:1px;background:#e2e8f0;margin-top:-2px;}
 .company-info-layout{display:grid;grid-template-columns:1fr;gap:28px;align-items:start;}
 .company-info-controls-card{box-shadow:0 8px 24px -18px rgba(17,24,39,.32);}
+.company-info-filters{display:flex;flex-wrap:wrap;gap:20px;align-items:stretch;}
+.company-info-filter-item{flex:1 1 100%;min-width:0;display:flex;}
+.company-info-filter-item .select{height:100%;}
 .company-edit-form-card{box-shadow:0 12px 28px -20px rgba(15,23,42,.45);}
+
+@media (min-width: 768px){
+  .company-info-filter-item{flex:1 1 280px;}
+}
+
+@media (min-width: 1024px){
+  .company-info-filter-item{flex:1 1 calc(50% - 10px);max-width:calc(50% - 10px);}
+}
 
 @media (min-width: 1200px){
   .company-info-layout{grid-template-columns:minmax(0,3fr) minmax(0,2fr);}

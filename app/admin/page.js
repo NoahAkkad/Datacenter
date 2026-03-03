@@ -953,28 +953,32 @@ export default function AdminPage() {
         {active === 'home' || active === 'upload' ? <div className="section-gap stack">
           <Card className="stack company-info-controls-card">
             <h2>Company Information</h2>
-            <div className="row">
-              <select className="select" value={selectedCompany} onChange={(event) => {
-                const companyId = event.target.value;
-                setSelectedCompany(companyId);
-                setSelectedCompanyApplication('');
-                setCompanyFieldPayload(null);
-                setRecordTextValues({});
-                setRecordFiles({});
-                setStatusMessage('');
-                fetchCompanyApplications(companyId);
-              }}>
-                <option value="">Select company</option>
-                {data.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
-              </select>
-              <select className="select" value={selectedCompanyApplication} disabled={!selectedCompany || isFetchingCompanyApplications || !companyApplications.length} onChange={(event) => {
-                const applicationId = event.target.value;
-                setSelectedCompanyApplication(applicationId);
-                fetchCompanyFields(selectedCompany, applicationId);
-              }}>
-                <option value="">Select application</option>
-                {companyApplications.map((application) => <option key={application.id} value={application.id}>{application.name}</option>)}
-              </select>
+            <div className="company-info-filters">
+              <div className="company-info-filter-item">
+                <select className="select" value={selectedCompany} onChange={(event) => {
+                  const companyId = event.target.value;
+                  setSelectedCompany(companyId);
+                  setSelectedCompanyApplication('');
+                  setCompanyFieldPayload(null);
+                  setRecordTextValues({});
+                  setRecordFiles({});
+                  setStatusMessage('');
+                  fetchCompanyApplications(companyId);
+                }}>
+                  <option value="">Select company</option>
+                  {data.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+                </select>
+              </div>
+              <div className="company-info-filter-item">
+                <select className="select" value={selectedCompanyApplication} disabled={!selectedCompany || isFetchingCompanyApplications || !companyApplications.length} onChange={(event) => {
+                  const applicationId = event.target.value;
+                  setSelectedCompanyApplication(applicationId);
+                  fetchCompanyFields(selectedCompany, applicationId);
+                }}>
+                  <option value="">Select application</option>
+                  {companyApplications.map((application) => <option key={application.id} value={application.id}>{application.name}</option>)}
+                </select>
+              </div>
             </div>
 
             {isFetchingCompanyApplications ? <p className="subtitle">Loading applications...</p> : null}

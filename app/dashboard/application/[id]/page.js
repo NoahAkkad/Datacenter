@@ -8,6 +8,7 @@ import { Modal } from '../../../../components/ui/modal';
 import { UserSidebar } from '../../../../components/UserSidebar';
 import { GroupedFieldsView } from '../../../../components/GroupedFieldsView';
 import { useAuth } from '../../../../components/AuthProvider';
+import { HeaderProfile } from '../../../../components/HeaderProfile';
 
 export default function ApplicationDetailsPage() {
   const router = useRouter();
@@ -77,20 +78,6 @@ export default function ApplicationDetailsPage() {
     }
   };
 
-  const formatDisplayName = (username = '') => {
-    const cleanedName = String(username || '').trim();
-    if (!cleanedName) return 'User';
-    return cleanedName
-      .replace(/[._-]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .split(' ')
-      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-      .join(' ');
-  };
-
-  const displayName = formatDisplayName(user?.username);
-  const displayEmail = user?.email?.trim() || 'Email unavailable';
-
   if (authLoading) {
     return (
       <main className="page-center">
@@ -115,10 +102,7 @@ export default function ApplicationDetailsPage() {
             <p className="subtitle">{applicationDetails?.companyName || 'Structured application information'}</p>
           </div>
           <div className="profile">
-            <button className="profile-trigger" onClick={() => setLogoutConfirmOpen(true)}>
-              <strong>{displayName}</strong>
-              <p className="subtitle">{displayEmail}</p>
-            </button>
+            <HeaderProfile user={user} loading={authLoading} onClick={() => setLogoutConfirmOpen(true)} />
           </div>
         </header>
 

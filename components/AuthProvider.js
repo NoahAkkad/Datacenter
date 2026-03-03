@@ -11,15 +11,29 @@ export function AuthProvider({ children }) {
   const refreshUser = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/auth/me', { cache: 'no-store' });
+      const response = await fetch('/api/auth/me', {
+        cache: 'no-store',
+        credentials: 'include'
+      });
+
       if (!response.ok) {
         setUser(null);
         return null;
       }
 
       const payload = await response.json();
-      setUser(payload);
-      return payload;
+      const normalizedUser = {
+        id: payload?.id || payload?.user?.id || '',
+        username: String(payload?.username || payload?.user?.username || '').trim(),
+        email: String(payload?.email || payload?.user?.email || '').trim(),
+        role: String(payload?.role || payload?.user?.role || '').trim()
+      };
+
+      setUser(normalizedUser);
+      return normalizedUser;
+    } catch {
+      setUser(null);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -51,4 +65,3 @@ export function useAuth() {
   }
   return context;
 }
-

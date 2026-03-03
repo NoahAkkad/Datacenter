@@ -5,12 +5,12 @@ import { usePathname } from 'next/navigation';
 import { Button } from './ui/button';
 
 const adminMenu = [
-  { key: 'home', label: '🏠 Home', href: '/admin' },
-  { key: 'companies', label: '🏢 Companies', href: '/admin?tab=companies' },
-  { key: 'applications', label: '🧩 Applications', href: '/admin?tab=applications' },
-  { key: 'fields', label: '🏷️ Dynamic Fields', href: '/admin?tab=fields' },
-  { key: 'users', label: '👥 Users', href: '/admin?tab=users' },
-  { key: 'upload', label: '📁 Company Information', href: '/admin?tab=upload' }
+  { key: 'home', label: 'Home', href: '/admin' },
+  { key: 'companies', label: 'Companies', href: '/admin?tab=companies' },
+  { key: 'applications', label: 'Applications', href: '/admin?tab=applications' },
+  { key: 'fields', label: 'Dynamic Fields', href: '/admin?tab=fields' },
+  { key: 'users', label: 'Users', href: '/admin?tab=users' },
+  { key: 'upload', label: 'Company Information', href: '/admin?tab=upload' }
 ];
 
 export function AdminSidebar({ collapsed, onToggle, activeTab, onNavigate, applications = [], selectedApplicationId = '' }) {
@@ -18,7 +18,8 @@ export function AdminSidebar({ collapsed, onToggle, activeTab, onNavigate, appli
 
   return (
     <aside className={`sidebar ${collapsed ? 'compact' : ''}`}>
-      <Button variant="secondary" onClick={onToggle}>{collapsed ? '➡️' : '⬅️'}</Button>
+      <div className="sidebar-brand">{collapsed ? 'DC' : 'Datacenter'}</div>
+      <Button variant="secondary" className="sidebar-toggle" onClick={onToggle}>{collapsed ? '→' : '←'}</Button>
       <div className="stack sidebar-nav">
         {adminMenu.map((item) => {
           const isActive = pathname === '/admin' && activeTab === item.key;

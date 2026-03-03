@@ -74,12 +74,14 @@ export default function ApplicationDetailsPage() {
 
   return (
     <main className="user-wrap">
-      <div className="dashboard-header">
+      <div className="dashboard-header details-header-card fade-in">
         <div>
           <h1 className="title">{application?.name || 'Application Details'}</h1>
           <p className="subtitle">{application?.companyName ? `Company: ${application.companyName}` : 'Read-only application data.'}</p>
-          <p className="subtitle">Created: {formatDate(application?.createdAt)}</p>
-          <p className="subtitle">Last modified: {formatDate(application?.updatedAt)}</p>
+          <div className="details-meta-row">
+            <p className="subtitle">Created: {formatDate(application?.createdAt)}</p>
+            <p className="subtitle">Updated: {formatDate(application?.updatedAt)}</p>
+          </div>
         </div>
         <Link href="/dashboard"><Button variant="secondary">Back to Applications</Button></Link>
       </div>

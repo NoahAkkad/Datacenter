@@ -256,6 +256,132 @@ function isNonEmptyId(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function duplicateCompanyStructure(db, { sourceCompanyId, name }) {
+  const sourceCompany = db.companies.find((company) => company.id === sourceCompanyId);
+  if (!sourceCompany) {
+    const error = new Error('Company not found');
+    error.status = 404;
+    throw error;
+  }
+
+  if (!Array.isArray(db.tags)) {
+    db.tags = [];
+  }
+  if (!Array.isArray(db.fields)) {
+    db.fields = [];
+  }
+
+  const sourceApplications = db.applications.filter((application) => application.companyId === sourceCompanyId);
+  if (sourceApplications.length === 0) {
+    const error = new Error('Cannot duplicate a company with no applications');
+    error.status = 400;
+    throw error;
+  }
+
+  const sourceApplicationIds = new Set(sourceApplications.map((application) => application.id));
+  const sourceTags = (db.tags || []).filter((tag) => {
+    const scope = resolveTagScope(tag);
+    if (scope === TAG_SCOPES.GLOBAL) {
+      return false;
+    }
+    if (scope === TAG_SCOPES.COMPANY) {
+      return tag.companyId === sourceCompanyId;
+    }
+    return sourceApplicationIds.has(tag.applicationId);
+  });
+
+  const sourceTagById = new Map(sourceTags.map((tag) => [tag.id, tag]));
+  const sourceTagIds = new Set(sourceTags.map((tag) => tag.id));
+  const sourceFields = (db.fields || []).filter((field) => sourceTagIds.has(field.tagId));
+
+  const now = new Date().toISOString();
+  const clonedCompany = {
+    id: nextId('cmp'),
+    name,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  const applicationIdMap = new Map();
+  const clonedApplications = sourceApplications.map((application) => {
+    const clonedApplication = {
+      id: nextId('app'),
+      companyId: clonedCompany.id,
+      name: application.name,
+      createdAt: now,
+      updatedAt: now
+    };
+    applicationIdMap.set(application.id, clonedApplication.id);
+    return clonedApplication;
+  });
+
+  const tagIdMap = new Map();
+  const clonedTags = sourceTags.map((tag) => {
+    const scope = resolveTagScope(tag);
+    const clonedTag = {
+      ...tag,
+      id: nextId('tag'),
+      companyId: clonedCompany.id,
+      company_id: clonedCompany.id,
+      scope,
+      scopeType: toScopeType(scope),
+      createdAt: now,
+      updatedAt: now
+    };
+
+    if (scope === TAG_SCOPES.APPLICATION) {
+      clonedTag.applicationId = applicationIdMap.get(tag.applicationId) || null;
+      clonedTag.allApplications = false;
+    }
+
+    if (scope === TAG_SCOPES.COMPANY) {
+      clonedTag.applicationId = null;
+      clonedTag.allApplications = true;
+    }
+
+    tagIdMap.set(tag.id, clonedTag.id);
+    return clonedTag;
+  });
+
+  const clonedTagNameById = new Map(clonedTags.map((tag) => [tag.id, tag.name]));
+  const clonedFields = sourceFields.map((field) => {
+    const sourceTag = sourceTagById.get(field.tagId);
+    const scope = resolveTagScope(sourceTag || field);
+    const clonedTagId = tagIdMap.get(field.tagId);
+    if (!clonedTagId) {
+      const error = new Error(`Tag mapping not found for field ${field.id}`);
+      error.status = 500;
+      throw error;
+    }
+
+    const applicationId = scope === TAG_SCOPES.APPLICATION
+      ? applicationIdMap.get(field.applicationId || sourceTag?.applicationId || '') || null
+      : null;
+
+    return {
+      ...field,
+      id: nextId('fld'),
+      applicationId,
+      companyId: clonedCompany.id,
+      allApplications: scope === TAG_SCOPES.COMPANY,
+      scope,
+      scope_type: toScopeType(scope),
+      tagId: clonedTagId,
+      tag_id: clonedTagId,
+      tagName: clonedTagNameById.get(clonedTagId) || field.tagName,
+      createdAt: now,
+      updatedAt: now
+    };
+  });
+
+  db.companies.push(clonedCompany);
+  db.applications.push(...clonedApplications);
+  db.tags.push(...clonedTags);
+  db.fields.push(...clonedFields);
+
+  return clonedCompany;
+}
+
 function logUpdateIssue(entity, message, meta = {}) {
   // eslint-disable-next-line no-console
   console.error(`[update:${entity}] ${message}`, meta);
@@ -672,6 +798,28 @@ app.prepare().then(() => {
       return db;
     });
     res.status(201).json(company);
+  });
+
+  server.post('/api/companies/:companyId/duplicate', authRequired, requireRole('admin'), (req, res) => {
+    const { companyId } = req.params;
+    const nextName = sanitizeText(req.body?.name);
+
+    if (!nextName) {
+      res.status(400).json({ error: 'Company name is required' });
+      return;
+    }
+
+    try {
+      let clonedCompany = null;
+      withDb((db) => {
+        clonedCompany = duplicateCompanyStructure(db, { sourceCompanyId: companyId, name: nextName });
+        return db;
+      });
+
+      res.status(201).json(clonedCompany);
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || 'Failed to duplicate company' });
+    }
   });
 
   server.post('/api/companies/:companyId/applications', authRequired, requireRole('admin'), (req, res) => {

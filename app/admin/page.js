@@ -33,6 +33,7 @@ export default function AdminPage() {
   const [statusMessage, setStatusMessage] = useState('');
 
   const [companyModal, setCompanyModal] = useState(false);
+  const [duplicateCompanyModal, setDuplicateCompanyModal] = useState({ open: false, sourceCompanyId: '', sourceCompanyName: '' });
   const [appModal, setAppModal] = useState(false);
   const [fieldModal, setFieldModal] = useState(false);
   const [userModal, setUserModal] = useState(false);
@@ -41,6 +42,7 @@ export default function AdminPage() {
   const [editing, setEditing] = useState({ open: false, type: '', id: '', payload: {}, title: '' });
 
   const [companyName, setCompanyName] = useState('');
+  const [duplicateCompanyName, setDuplicateCompanyName] = useState('');
   const [appName, setAppName] = useState('');
   const [fieldForm, setFieldForm] = useState({ name: '', type: 'text', tagId: '' });
   const [userForm, setUserForm] = useState({ username: '', password: '' });
@@ -52,6 +54,7 @@ export default function AdminPage() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [duplicatingCompany, setDuplicatingCompany] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('');
   const [deletingUserId, setDeletingUserId] = useState('');
   const [globalTagConfirmOpen, setGlobalTagConfirmOpen] = useState(false);
@@ -245,6 +248,43 @@ export default function AdminPage() {
     setCompanyModal(false);
     setCompanyName('');
     refresh();
+  };
+
+  const openDuplicateCompanyModal = (company) => {
+    setDuplicateCompanyModal({ open: true, sourceCompanyId: company.id, sourceCompanyName: company.name });
+    setDuplicateCompanyName(`${company.name} Copy`);
+    setStatusMessage('');
+  };
+
+  const duplicateCompany = async () => {
+    if (!duplicateCompanyModal.sourceCompanyId || !duplicateCompanyName.trim()) {
+      setStatusMessage('New company name is required.');
+      return;
+    }
+
+    setDuplicatingCompany(true);
+    try {
+      const response = await fetch(`/api/companies/${duplicateCompanyModal.sourceCompanyId}/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: duplicateCompanyName.trim() })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatusMessage(payload.error || 'Company duplication failed.');
+        return;
+      }
+
+      setStatusMessage(`Company duplicated successfully as ${payload.name || duplicateCompanyName.trim()}.`);
+      setDuplicateCompanyModal({ open: false, sourceCompanyId: '', sourceCompanyName: '' });
+      setDuplicateCompanyName('');
+      refresh();
+    } catch {
+      setStatusMessage('Company duplication failed. Please retry.');
+    } finally {
+      setDuplicatingCompany(false);
+    }
   };
 
   const createApp = async () => {
@@ -758,7 +798,21 @@ export default function AdminPage() {
                 {
                   key: 'actions',
                   label: 'Actions',
-                  render: (row) => <div className="row"><Button variant="secondary" onClick={() => openEdit('company', row)}>Edit</Button><Button onClick={() => openDelete('company', row.id, row.name)}>Delete</Button></div>
+                  render: (row) => (
+                    <div className="row">
+                      <Button variant="secondary" onClick={() => openEdit('company', row)}>Edit</Button>
+                      <Button
+                        variant="secondary"
+                        className="icon-button"
+                        title="Duplicate company"
+                        aria-label={`Duplicate ${row.name}`}
+                        onClick={() => openDuplicateCompanyModal(row)}
+                      >
+                        📄
+                      </Button>
+                      <Button onClick={() => openDelete('company', row.id, row.name)}>Delete</Button>
+                    </div>
+                  )
                 }
               ]}
               data={filteredCompanies}
@@ -945,6 +999,23 @@ export default function AdminPage() {
       <Modal open={companyModal} onClose={() => setCompanyModal(false)} title="Create Company">
         <Input placeholder="Company name" value={companyName} onChange={(event) => setCompanyName(event.target.value)} />
         <Button onClick={createCompany} disabled={!companyName.trim()}>Create</Button>
+      </Modal>
+
+      <Modal
+        open={duplicateCompanyModal.open}
+        onClose={() => !duplicatingCompany && setDuplicateCompanyModal({ open: false, sourceCompanyId: '', sourceCompanyName: '' })}
+        title="Duplicate company"
+      >
+        <p className="subtitle">Create a structural copy of {duplicateCompanyModal.sourceCompanyName || 'the selected company'}.</p>
+        <Input
+          placeholder="New company name"
+          value={duplicateCompanyName}
+          onChange={(event) => setDuplicateCompanyName(event.target.value)}
+        />
+        <div className="row">
+          <Button variant="secondary" onClick={() => setDuplicateCompanyModal({ open: false, sourceCompanyId: '', sourceCompanyName: '' })} disabled={duplicatingCompany}>Cancel</Button>
+          <Button onClick={duplicateCompany} disabled={duplicatingCompany || !duplicateCompanyName.trim()}>{duplicatingCompany ? 'Creating copy...' : 'Create Copy'}</Button>
+        </div>
       </Modal>
 
       <Modal open={appModal} onClose={() => setAppModal(false)} title="Create Application">

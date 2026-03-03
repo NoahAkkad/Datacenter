@@ -75,6 +75,25 @@ export default function AdminPage() {
   const [deletingUserId, setDeletingUserId] = useState('');
   const [globalTagConfirmOpen, setGlobalTagConfirmOpen] = useState(false);
 
+  const parseApiJsonResponse = async (response) => {
+    const contentType = response.headers.get('content-type') || '';
+    const responseText = await response.text();
+
+    if (contentType.includes('text/html')) {
+      throw new Error('API route not found – returned HTML instead of JSON');
+    }
+
+    if (!responseText) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(responseText);
+    } catch {
+      throw new Error('API returned a non-JSON response');
+    }
+  };
+
   useEffect(() => {
     if (authLoading) return;
 
@@ -451,7 +470,7 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payloadBody)
       });
-      const payload = await response.json();
+      const payload = await parseApiJsonResponse(response);
       if (!response.ok) {
         setStatusMessage(payload.error || 'Tag creation failed.');
         return;
@@ -468,8 +487,8 @@ export default function AdminPage() {
         setStatusMessage('Tag successfully added.');
       }
       refresh();
-    } catch {
-      setStatusMessage('Tag creation request failed. Please retry.');
+    } catch (error) {
+      setStatusMessage(error?.message || 'Tag creation request failed. Please retry.');
     }
   };
 
@@ -602,6 +621,16 @@ export default function AdminPage() {
     if (type === 'user') setEditing({ open: true, type, id: row.id, payload: { username: row.username, email: row.email || '', password: '' }, title: 'Edit User' });
   };
 
+  const handleTagPresetChange = (presetKey) => {
+    const selectedPreset = tagPresetOptions.find((preset) => preset.key === presetKey);
+    setTagForm((current) => ({
+      ...current,
+      presetKey,
+      name: selectedPreset?.name || current.name,
+      description: selectedPreset?.description || (selectedPreset ? '' : current.description)
+    }));
+  };
+
   const applyOptimisticEdit = (type, id, updatedEntity) => {
     if (type === 'company') {
       setData((current) => current.map((company) => (company.id === id ? { ...company, ...updatedEntity } : company)));
@@ -690,20 +719,13 @@ export default function AdminPage() {
     setSavingEdit(true);
     setStatusMessage('');
     try {
+      const method = type === 'tag' ? 'PUT' : 'PATCH';
       const response = await fetch(endpointMap[type], {
-        method: 'PATCH',
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const responseText = await response.text();
-      let responsePayload = {};
-      if (responseText) {
-        try {
-          responsePayload = JSON.parse(responseText);
-        } catch {
-          responsePayload = { error: responseText };
-        }
-      }
+      const responsePayload = await parseApiJsonResponse(response);
       if (!response.ok) {
         setStatusMessage(`Update failed: ${responsePayload.error || 'unknown error'}`);
         return;
@@ -1219,7 +1241,7 @@ export default function AdminPage() {
 
         <Input placeholder="Tag name" value={tagForm.name} onChange={(event) => setTagForm((current) => ({ ...current, name: event.target.value }))} />
         <Input placeholder="Description (optional)" value={tagForm.description} onChange={(event) => setTagForm((current) => ({ ...current, description: event.target.value }))} />
-        <select className="select" value={tagForm.presetKey || ''} onChange={(event) => setTagForm((current) => ({ ...current, presetKey: event.target.value }))}>
+        <select className="select" value={tagForm.presetKey || ''} onChange={(event) => handleTagPresetChange(event.target.value)}>
           <option value="">Use Preset Template (Optional)</option>
           {tagPresetOptions.map((preset) => <option key={preset.key} value={preset.key}>{preset.name}</option>)}
         </select>

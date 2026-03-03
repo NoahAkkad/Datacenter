@@ -6,6 +6,7 @@ const multer = require('multer');
 const next = require('next');
 const { readDb, writeDb, withDb, nextId } = require('./lib/db');
 const { hashPassword, verifyPassword, signToken, verifyToken } = require('./lib/auth');
+const { PRESET_FIELD_TYPES, getTagPresets, getPresetByKey } = require('./lib/tagPresetLibrary');
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
@@ -97,6 +98,20 @@ function normalizeLinkValue(value) {
 
 function normalizeFieldName(value) {
   return sanitizeText(value).toLowerCase();
+}
+
+function normalizeNumberValue(value) {
+  const trimmed = sanitizeText(value);
+  if (!trimmed) {
+    return { valid: true, value: '' };
+  }
+
+  const normalized = Number(trimmed);
+  if (!Number.isFinite(normalized)) {
+    return { valid: false, value: '' };
+  }
+
+  return { valid: true, value: String(normalized) };
 }
 
 function normalizeTagName(value) {
@@ -193,6 +208,50 @@ function normalizeTagEntity(tag, now = new Date().toISOString()) {
   return scopedTag;
 }
 
+function buildPresetFieldsForTag(db, tag, applicationId, preset) {
+  const tagScope = resolveTagScope(tag);
+  const scopedApplicationId = tagScope === TAG_SCOPES.APPLICATION ? applicationId : null;
+  const existingFields = db.fields.filter((field) => field.tagId === tag.id);
+  const existingNames = new Set(existingFields.map((field) => normalizeFieldName(field.name)));
+  const now = new Date().toISOString();
+  const createdFields = [];
+  const skippedFields = [];
+
+  for (const presetField of preset.fields) {
+    const normalizedFieldType = sanitizeText(presetField.type).toLowerCase();
+    if (!PRESET_FIELD_TYPES.includes(normalizedFieldType)) {
+      skippedFields.push(presetField.name);
+      continue;
+    }
+
+    if (existingNames.has(normalizeFieldName(presetField.name))) {
+      skippedFields.push(presetField.name);
+      continue;
+    }
+
+    const field = {
+      id: nextId('fld'),
+      applicationId: scopedApplicationId,
+      companyId: tagScope === TAG_SCOPES.GLOBAL ? null : tag.companyId,
+      allApplications: tagScope === TAG_SCOPES.COMPANY,
+      scope: tagScope,
+      scope_type: toScopeType(tagScope),
+      name: sanitizeText(presetField.name),
+      type: normalizedFieldType,
+      tagId: tag.id,
+      tag_id: tag.id,
+      tagName: tag.name,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    createdFields.push(field);
+    existingNames.add(normalizeFieldName(presetField.name));
+  }
+
+  return { createdFields, skippedFields };
+}
+
 function isNonEmptyId(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -284,6 +343,19 @@ function normalizeRecordFields(fields, tags = [], recordValues = {}) {
         return {
           label: field.name,
           type: 'text',
+          value: rawValue === undefined || rawValue === null ? '—' : String(rawValue),
+          tagId: matchedTag?.id || null,
+          tagName: tagLabel,
+          tagScope: scope,
+          tagScopeType: toScopeType(scope),
+          ...fieldMetadata
+        };
+      }
+
+      if (field.type === 'number') {
+        return {
+          label: field.name,
+          type: 'number',
           value: rawValue === undefined || rawValue === null ? '—' : String(rawValue),
           tagId: matchedTag?.id || null,
           tagName: tagLabel,
@@ -669,6 +741,7 @@ app.prepare().then(() => {
     const nextDescription = sanitizeText(req.body?.description);
     const bodyScope = normalizeTagScope(req.body?.scope);
     const companyIdFromBody = sanitizeText(req.body?.companyId);
+    const presetTemplate = getPresetByKey(req.body?.presetKey);
     const isLegacyAllApplications = applicationId === 'all';
     const requestedScope = bodyScope || (isLegacyAllApplications ? TAG_SCOPES.COMPANY : TAG_SCOPES.APPLICATION);
     const db = readDb();
@@ -739,10 +812,37 @@ app.prepare().then(() => {
 
     withDb((current) => {
       current.tags.push(tag);
+
+      let presetResult = { createdFields: [], skippedFields: [] };
+      if (presetTemplate) {
+        presetResult = buildPresetFieldsForTag(current, tag, application?.id || null, presetTemplate);
+        if (presetResult.createdFields.length > 0) {
+          current.fields.push(...presetResult.createdFields);
+        }
+      }
+
+      tag._presetResult = presetResult;
       return current;
     });
 
-    res.status(201).json(tag);
+    const presetResult = tag._presetResult || { createdFields: [], skippedFields: [] };
+    delete tag._presetResult;
+
+    res.status(201).json({
+      ...tag,
+      preset: presetTemplate
+        ? {
+          key: presetTemplate.key,
+          createdCount: presetResult.createdFields.length,
+          skippedCount: presetResult.skippedFields.length,
+          skippedFields: presetResult.skippedFields
+        }
+        : null
+    });
+  });
+
+  server.get('/api/tag-presets', authRequired, requireRole('admin'), (_, res) => {
+    res.json({ presets: getTagPresets() });
   });
 
   server.put('/api/tags/:id', authRequired, requireRole('admin'), (req, res) => {
@@ -871,7 +971,7 @@ app.prepare().then(() => {
   server.post('/api/applications/:applicationId/fields', authRequired, requireRole('admin'), (req, res) => {
     const { applicationId } = req.params;
     const { name, type, applicationIds = [], tagId } = req.body;
-    const allowedTypes = ['text', 'pdf', 'image', 'link'];
+    const allowedTypes = PRESET_FIELD_TYPES;
     const nextName = sanitizeText(name);
 
     if (!allowedTypes.includes(type)) {
@@ -996,6 +1096,16 @@ app.prepare().then(() => {
 
       if (field.type === 'text') {
         values[field.id] = sanitizeText(values[field.id]);
+        continue;
+      }
+
+      if (field.type === 'number') {
+        const normalizedNumber = normalizeNumberValue(values[field.id]);
+        if (!normalizedNumber.valid) {
+          res.status(400).json({ error: `Invalid number for field: ${field.name}` });
+          return;
+        }
+        values[field.id] = normalizedNumber.value;
         continue;
       }
 
@@ -1293,7 +1403,7 @@ app.prepare().then(() => {
 
   const updateFieldHandler = (req, res) => {
     const { id } = req.params;
-    const allowedTypes = ['text', 'pdf', 'image', 'link'];
+    const allowedTypes = PRESET_FIELD_TYPES;
     if (!isNonEmptyId(id)) {
       logUpdateIssue('field', 'Invalid ID', { id });
       res.status(400).json({ error: 'Invalid ID' });
@@ -1444,6 +1554,16 @@ app.prepare().then(() => {
 
       if (field.type === 'text') {
         record.values[field.id] = sanitizeText(incomingValue);
+        continue;
+      }
+
+      if (field.type === 'number') {
+        const normalizedNumber = normalizeNumberValue(incomingValue);
+        if (!normalizedNumber.valid) {
+          res.status(400).json({ error: `Invalid number for field: ${field.name}` });
+          return;
+        }
+        record.values[field.id] = normalizedNumber.value;
         continue;
       }
 

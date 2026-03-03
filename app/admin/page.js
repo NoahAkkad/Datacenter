@@ -44,7 +44,8 @@ export default function AdminPage() {
   const [appName, setAppName] = useState('');
   const [fieldForm, setFieldForm] = useState({ name: '', type: 'text', tagId: '' });
   const [userForm, setUserForm] = useState({ username: '', password: '' });
-  const [tagForm, setTagForm] = useState({ scope: 'application', companyId: '', applicationId: '', name: '', description: '' });
+  const [tagForm, setTagForm] = useState({ scope: 'application', companyId: '', applicationId: '', name: '', description: '', presetKey: '' });
+  const [tagPresetOptions, setTagPresetOptions] = useState([]);
   const [checkingSession, setCheckingSession] = useState(true);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -205,6 +206,25 @@ export default function AdminPage() {
     refresh();
   }, [checkingSession]);
 
+  useEffect(() => {
+    if (checkingSession) return;
+    const loadTagPresets = async () => {
+      try {
+        const response = await fetch('/api/tag-presets');
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setTagPresetOptions([]);
+          return;
+        }
+        setTagPresetOptions(payload.presets || []);
+      } catch {
+        setTagPresetOptions([]);
+      }
+    };
+
+    loadTagPresets();
+  }, [checkingSession]);
+
   const onLogout = async () => {
     setIsLoggingOut(true);
     try {
@@ -301,6 +321,7 @@ export default function AdminPage() {
       description: tagForm.description,
       scope: tagForm.scope,
       companyId: tagForm.scope === 'company' ? tagForm.companyId : undefined,
+      presetKey: tagForm.presetKey || undefined,
       confirmGlobal: isGlobalScope ? confirmGlobal : undefined
     };
 
@@ -317,8 +338,15 @@ export default function AdminPage() {
       }
       setTagModal(false);
       setGlobalTagConfirmOpen(false);
-      setTagForm({ scope: 'application', companyId: '', applicationId: '', name: '', description: '' });
-      setStatusMessage('Tag successfully added.');
+      setTagForm({ scope: 'application', companyId: '', applicationId: '', name: '', description: '', presetKey: '' });
+
+      if (payload?.preset?.skippedCount > 0) {
+        setStatusMessage('Tag added. Some fields were skipped because they already exist.');
+      } else if (payload?.preset?.createdCount > 0) {
+        setStatusMessage(`Tag and ${payload.preset.createdCount} preset field(s) added successfully.`);
+      } else {
+        setStatusMessage('Tag successfully added.');
+      }
       refresh();
     } catch {
       setStatusMessage('Tag creation request failed. Please retry.');
@@ -373,7 +401,7 @@ export default function AdminPage() {
       const initialValues = {};
       (payload.applications || []).forEach((application) => {
         (application.fields || []).forEach((field) => {
-          if (field.type === 'text' || field.type === 'link') {
+          if (field.type === 'text' || field.type === 'link' || field.type === 'number') {
             initialValues[field.id] = application.values?.[field.id] || '';
           }
         });
@@ -407,7 +435,7 @@ export default function AdminPage() {
       const updates = companyFieldPayload.applications.map(async (application) => {
         const formData = new FormData();
         const textValues = (application.fields || []).reduce((accumulator, field) => {
-          if (field.type === 'text' || field.type === 'link') {
+          if (field.type === 'text' || field.type === 'link' || field.type === 'number') {
             accumulator[field.id] = recordTextValues[field.id] || '';
           }
           return accumulator;
@@ -857,12 +885,12 @@ export default function AdminPage() {
               <GroupedFieldsView groupedFields={application.groupedFields || []} />
               {(application.fields || []).map((field) => {
                 const existingValue = application.values?.[field.id];
-                if (field.type === 'text' || field.type === 'link') {
+                if (field.type === 'text' || field.type === 'link' || field.type === 'number') {
                   return (
                     <div key={field.id}>
                       <strong>{field.name}</strong>
                       <Input
-                        type={field.type === 'link' ? 'url' : 'text'}
+                        type={field.type === 'link' ? 'url' : field.type === 'number' ? 'number' : 'text'}
                         placeholder={field.type === 'link' ? 'https://example.com' : ''}
                         value={recordTextValues[field.id] || ''}
                         onChange={(event) => setRecordTextValues((current) => ({ ...current, [field.id]: event.target.value }))}
@@ -948,6 +976,7 @@ export default function AdminPage() {
         <Input placeholder="Field name" value={fieldForm.name} onChange={(event) => setFieldForm({ ...fieldForm, name: event.target.value })} />
         <select className="select" value={fieldForm.type} onChange={(event) => setFieldForm({ ...fieldForm, type: event.target.value })}>
           <option value="text">Text</option>
+          <option value="number">Number</option>
           <option value="image">Image</option>
           <option value="pdf">PDF</option>
           <option value="link">Link</option>
@@ -991,6 +1020,10 @@ export default function AdminPage() {
 
         <Input placeholder="Tag name" value={tagForm.name} onChange={(event) => setTagForm((current) => ({ ...current, name: event.target.value }))} />
         <Input placeholder="Description (optional)" value={tagForm.description} onChange={(event) => setTagForm((current) => ({ ...current, description: event.target.value }))} />
+        <select className="select" value={tagForm.presetKey || ''} onChange={(event) => setTagForm((current) => ({ ...current, presetKey: event.target.value }))}>
+          <option value="">Use Preset Template (Optional)</option>
+          {tagPresetOptions.map((preset) => <option key={preset.key} value={preset.key}>{preset.name}</option>)}
+        </select>
         <Button onClick={() => createTag()} disabled={!tagForm.name.trim()}>Create Tag</Button>
       </Modal>
 
@@ -1017,6 +1050,7 @@ export default function AdminPage() {
             <Input placeholder="Field name" value={editing.payload.name || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, name: event.target.value } }))} />
             <select className="select" value={editing.payload.type || 'text'} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, type: event.target.value } }))}>
               <option value="text">Text</option>
+              <option value="number">Number</option>
               <option value="image">Image</option>
               <option value="pdf">PDF</option>
               <option value="link">Link</option>
@@ -1043,8 +1077,10 @@ export default function AdminPage() {
         </> : null}
         {editing.type === 'data' ? fields.filter((field) => records.find((record) => record.id === editing.id)?.applicationId === field.applicationId).map((field) => {
           const currentValue = editing.payload.values?.[field.id];
-          if (field.type === 'text' || field.type === 'link') {
-            return <Input key={field.id} type={field.type === 'link' ? 'url' : 'text'} placeholder={field.type === 'link' ? `${field.name} (https://...)` : field.name} value={currentValue || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, values: { ...current.payload.values, [field.id]: event.target.value } } }))} />;
+          if (field.type === 'text' || field.type === 'link' || field.type === 'number') {
+            const inputType = field.type === 'link' ? 'url' : field.type === 'number' ? 'number' : 'text';
+            const placeholder = field.type === 'link' ? `${field.name} (https://...)` : field.name;
+            return <Input key={field.id} type={inputType} placeholder={placeholder} value={currentValue || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, values: { ...current.payload.values, [field.id]: event.target.value } } }))} />;
           }
           return (
             <div key={field.id} className="stack">

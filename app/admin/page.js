@@ -56,12 +56,13 @@ export default function AdminPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [duplicatingCompany, setDuplicatingCompany] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('');
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
   const [deletingUserId, setDeletingUserId] = useState('');
   const [globalTagConfirmOpen, setGlobalTagConfirmOpen] = useState(false);
 
   useEffect(() => {
     const validateSession = async () => {
-      const response = await fetch('/api/auth/me');
+      const response = await fetch('/api/auth/me', { cache: 'no-store' });
       if (!response.ok) {
         router.replace('/login?portal=admin');
         return;
@@ -73,6 +74,7 @@ export default function AdminPage() {
         return;
       }
       setCurrentUserId(user.id || '');
+      setCurrentUserProfile(user);
       setCheckingSession(false);
     };
 
@@ -235,6 +237,7 @@ export default function AdminPage() {
     } finally {
       window.localStorage.removeItem('authToken');
       window.sessionStorage.removeItem('authToken');
+      setCurrentUserProfile(null);
       setIsLoggingOut(false);
       setLogoutConfirmOpen(false);
       setProfileMenuOpen(false);
@@ -725,6 +728,21 @@ export default function AdminPage() {
 
   const filteredCompanies = data.filter((company) => company.name.toLowerCase().includes(search.toLowerCase()));
 
+
+  const formatDisplayName = (username = '') => {
+    const cleanedName = String(username || '').trim();
+    if (!cleanedName) return 'User';
+    return cleanedName
+      .replace(/[._-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .split(' ')
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
+  };
+
+  const displayName = formatDisplayName(currentUserProfile?.username);
+  const displayEmail = currentUserProfile?.email || 'No email available';
+
   const onSidebarNavigate = (tab, applicationId = '') => {
     setActive(tab);
     if (tab === 'applications') {
@@ -768,8 +786,8 @@ export default function AdminPage() {
           </div>
           <div className="profile">
             <button className="profile-trigger" onClick={() => setProfileMenuOpen((value) => !value)}>
-              <strong>Administrator</strong>
-              <p className="subtitle">admin@datacenter.io</p>
+              <strong>{displayName}</strong>
+              <p className="subtitle">{displayEmail}</p>
             </button>
             {profileMenuOpen ? <div className="profile-menu"><button className="menu-item danger" onClick={() => setLogoutConfirmOpen(true)}>Logout</button></div> : null}
           </div>

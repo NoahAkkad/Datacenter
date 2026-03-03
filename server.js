@@ -692,7 +692,15 @@ app.prepare().then(() => {
   server.post('/api/logout', logoutHandler);
 
   server.get('/api/auth/me', authRequired, (req, res) => {
-    res.json(req.user);
+    const db = readDb();
+    const account = db.users.find((entry) => entry.id === req.user.id);
+
+    res.json({
+      id: req.user.id,
+      username: req.user.username,
+      role: req.user.role,
+      email: account?.email || ''
+    });
   });
 
   server.get('/api/companies', authRequired, requireRole('admin'), (req, res) => {

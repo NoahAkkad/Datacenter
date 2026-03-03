@@ -2,6 +2,7 @@
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../components/AuthProvider';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
@@ -12,6 +13,7 @@ const MAX_SUGGESTIONS = 5;
 function LoginContent() {
   const params = useSearchParams();
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const portal = params.get('portal') || 'user';
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
@@ -57,24 +59,29 @@ function LoginContent() {
     setError('');
     setLoading(true);
 
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, portal })
-    });
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, portal })
+      });
 
-    if (!response.ok) {
-      const payload = await response.json();
-      setError(payload.error || 'Login failed');
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(payload.error || 'Login failed');
+        return;
+      }
+
+      await refreshUser();
+      saveUsername(form.username);
+      const destination = payload.role === 'admin' ? '/admin' : '/dashboard';
+      router.push(destination);
+      router.refresh();
+    } catch {
+      setError('Unable to complete login. Please try again.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const payload = await response.json();
-    saveUsername(form.username);
-    const destination = payload.role === 'admin' ? '/admin' : '/dashboard';
-    router.push(destination);
-    router.refresh();
   };
 
   const isAdmin = portal === 'admin';

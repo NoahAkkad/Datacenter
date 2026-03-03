@@ -290,8 +290,6 @@ export default function AdminPage() {
     try {
       await fetch('/api/logout', { method: 'POST' });
     } finally {
-      window.localStorage.removeItem('authToken');
-      window.sessionStorage.removeItem('authToken');
       clearUser();
       setIsLoggingOut(false);
       router.replace('/login?portal=admin');

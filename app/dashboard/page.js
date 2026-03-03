@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
 import { UserSidebar } from '../../components/UserSidebar';
 import { useAuth } from '../../components/AuthProvider';
 import { HeaderMenu } from '../../components/HeaderMenu';
@@ -62,8 +61,6 @@ export default function DashboardPage() {
     try {
       await fetch('/api/logout', { method: 'POST' });
     } finally {
-      window.localStorage.removeItem('authToken');
-      window.sessionStorage.removeItem('authToken');
       clearUser();
       setIsLoggingOut(false);
       router.replace('/login?portal=user');

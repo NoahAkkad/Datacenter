@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Button } from './ui/button';
 
 const adminMenu = [
   { key: 'home', label: 'Home', href: '/admin' },
@@ -13,13 +12,12 @@ const adminMenu = [
   { key: 'upload', label: 'Company Information', href: '/admin?tab=upload' }
 ];
 
-export function AdminSidebar({ collapsed, onToggle, activeTab, onNavigate, applications = [], selectedApplicationId = '' }) {
+export function AdminSidebar({ activeTab, onNavigate, applications = [], selectedApplicationId = '' }) {
   const pathname = usePathname();
 
   return (
-    <aside className={`sidebar ${collapsed ? 'compact' : ''}`}>
-      <div className="sidebar-brand">{collapsed ? 'DC' : 'Datacenter'}</div>
-      <Button variant="secondary" className="sidebar-toggle" onClick={onToggle}>{collapsed ? '→' : '←'}</Button>
+    <aside className="sidebar">
+      <div className="sidebar-brand">Datacenter</div>
       <div className="stack sidebar-nav">
         {adminMenu.map((item) => {
           const isActive = pathname === '/admin' && activeTab === item.key;
@@ -31,12 +29,12 @@ export function AdminSidebar({ collapsed, onToggle, activeTab, onNavigate, appli
               className={`nav-btn ${isActive ? 'active' : ''}`}
               onClick={() => onNavigate(item.key)}
             >
-              {collapsed ? item.label.split(' ')[0] : item.label}
+              {item.label}
             </Link>
           );
         })}
 
-        {!collapsed && activeTab === 'applications' ? (
+        {activeTab === 'applications' ? (
           <div className="stack app-sidebar-list">
             {applications.map((application) => (
               <Link

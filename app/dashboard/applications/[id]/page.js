@@ -26,7 +26,6 @@ export default function ApplicationDetailsPage() {
   const [application, setApplication] = useState(null);
   const [error, setError] = useState('');
   const [imagePreview, setImagePreview] = useState('');
-  const [collapsedSections, setCollapsedSections] = useState({});
 
   useEffect(() => {
     const loadApplication = async () => {
@@ -89,16 +88,16 @@ export default function ApplicationDetailsPage() {
         <Card><p className="error">{error}</p></Card>
       ) : null}
 
-      {!application?.groupedFields || Object.keys(application.groupedFields).length === 0 ? (
+      {!application?.groupedFields || application.groupedFields.length === 0 ? (
         <Card><p className="subtitle">No records available.</p></Card>
       ) : (
-        <Card>
-          <div className="stack section-mini-gap">
-            {Object.entries(application.groupedFields).map(([tagName, tagFields]) => (
-              <div key={tagName} className="stack section-mini-gap">
-                <h3>{tagName}</h3>
-                {tagFields.map((field) => (
-                  <div key={`${tagName}-${field.label}-${field.type}`} className="field-row">
+        <div className="stack section-mini-gap">
+          {application.groupedFields.map((tagGroup) => (
+            <Card key={tagGroup.id}>
+              <div className="stack section-mini-gap">
+                <h3>{tagGroup.name} <span className="subtitle">({tagGroup.scopeLabel})</span></h3>
+                {tagGroup.fields.map((field) => (
+                  <div key={`${tagGroup.id}-${field.label}-${field.type}`} className="field-row">
                     <strong>{field.label}</strong>
                     {field.type === 'text' ? (
                       <span>{field.value}</span>
@@ -110,9 +109,9 @@ export default function ApplicationDetailsPage() {
                   </div>
                 ))}
               </div>
-            ))}
-          </div>
-        </Card>
+            </Card>
+          ))}
+        </div>
       )}
 
       <Modal open={Boolean(imagePreview)} onClose={() => setImagePreview('')} title="Image Preview">

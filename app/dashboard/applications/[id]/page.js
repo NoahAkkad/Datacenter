@@ -6,19 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Card } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
 import { GroupedFieldsView } from '../../../../components/GroupedFieldsView';
-
-
-function formatDate(value) {
-  if (!value) return '—';
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '—';
-
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+import { formatDateOnly } from '../../../../lib/formatDate';
 
 export default function ApplicationDetailsPage() {
   const { id } = useParams();
@@ -64,6 +52,10 @@ export default function ApplicationDetailsPage() {
     }
   }, [id, router]);
 
+  const createdDate = formatDateOnly(application?.createdAt);
+  const updatedDate = formatDateOnly(application?.updatedAt);
+  const hasMetadata = Boolean(createdDate || updatedDate);
+
   if (loading) {
     return (
       <main className="page-center">
@@ -78,10 +70,12 @@ export default function ApplicationDetailsPage() {
         <div>
           <h1 className="title">{application?.name || 'Application Details'}</h1>
           <p className="subtitle">{application?.companyName ? `Company: ${application.companyName}` : 'Read-only application data.'}</p>
-          <div className="details-meta-row">
-            <p className="subtitle">Created: {formatDate(application?.createdAt)}</p>
-            <p className="subtitle">Updated: {formatDate(application?.updatedAt)}</p>
-          </div>
+          {hasMetadata ? (
+            <div className="details-meta-row">
+              {createdDate ? <p className="subtitle">Created: {createdDate}</p> : null}
+              {updatedDate ? <p className="subtitle">Updated: {updatedDate}</p> : null}
+            </div>
+          ) : null}
         </div>
         <Link href="/dashboard"><Button variant="secondary">Back to Applications</Button></Link>
       </div>

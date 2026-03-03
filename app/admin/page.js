@@ -10,6 +10,7 @@ import { Modal } from '../../components/ui/modal';
 import { DataTable } from '../../components/ui/table';
 import { AdminSidebar } from '../../components/AdminSidebar';
 import { GroupedFieldsView } from '../../components/GroupedFieldsView';
+import { formatDateOnly } from '../../lib/formatDate';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -837,12 +838,21 @@ export default function AdminPage() {
           {isFetchingCompanyFields ? <p className="subtitle">Loading company information...</p> : null}
           {selectedCompanyInfo && selectedCompanyApplication && !isFetchingCompanyFields && companyFieldPayload && !companyFieldPayload.hasData ? <p className="subtitle">No saved information exists for {selectedCompanyInfo.name} yet.</p> : null}
 
-          {companyFieldPayload?.applications?.map((application) => (
-            <div key={application.applicationId} className="stack">
+          {companyFieldPayload?.applications?.map((application) => {
+            const createdDate = formatDateOnly(application.recordCreatedAt);
+            const updatedDate = formatDateOnly(application.recordUpdatedAt);
+            const hasMetadata = Boolean(createdDate || updatedDate);
+
+            return (
+              <div key={application.applicationId} className="stack">
               <div>
                 <Badge>{application.applicationName}</Badge>
-                <p className="subtitle">Created: {application.recordCreatedAt ? new Date(application.recordCreatedAt).toISOString().slice(0, 10) : '—'}</p>
-                <p className="subtitle">Last modified: {application.recordUpdatedAt ? new Date(application.recordUpdatedAt).toISOString().slice(0, 10) : '—'}</p>
+                {hasMetadata ? (
+                  <div>
+                    {createdDate ? <p className="subtitle">Created: {createdDate}</p> : null}
+                    {updatedDate ? <p className="subtitle">Updated: {updatedDate}</p> : null}
+                  </div>
+                ) : null}
               </div>
               <GroupedFieldsView groupedFields={application.groupedFields || []} />
               {(application.fields || []).map((field) => {
@@ -869,8 +879,9 @@ export default function AdminPage() {
                   </div>
                 );
               })}
-            </div>
-          ))}
+              </div>
+            );
+          })}
 
           <Button onClick={updateCompanyInformation} disabled={!selectedCompany || !selectedCompanyApplication || isFetchingCompanyFields}>Update Information</Button>
         </Card></div> : null}

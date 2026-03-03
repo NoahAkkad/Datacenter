@@ -1,15 +1,13 @@
 'use client';
 
 import { FieldRenderer } from './FieldRenderer';
-
-function formatMetaDate(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString();
-}
+import { formatDateOnly } from '../lib/formatDate';
 
 export function FieldCard({ field, onPreviewImage }) {
+  const createdDate = formatDateOnly(field.createdAt);
+  const updatedDate = formatDateOnly(field.updatedAt);
+  const hasMetadata = Boolean(createdDate || updatedDate);
+
   return (
     <article className="field-card">
       <header className="field-card-header">
@@ -20,10 +18,12 @@ export function FieldCard({ field, onPreviewImage }) {
         <FieldRenderer field={field} onPreviewImage={onPreviewImage} />
       </div>
 
-      <footer className="field-meta">
-        <span>Created: {formatMetaDate(field.createdAt)}</span>
-        <span>Updated: {formatMetaDate(field.updatedAt)}</span>
-      </footer>
+      {hasMetadata ? (
+        <footer className="field-meta">
+          {createdDate ? <span>Created: {createdDate}</span> : null}
+          {updatedDate ? <span>Updated: {updatedDate}</span> : null}
+        </footer>
+      ) : null}
     </article>
   );
 }

@@ -1,19 +1,32 @@
-import Link from 'next/link';
-import { Card } from '../components/ui/card';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+
+function readTokenPayload(token) {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
 
 export default function Home() {
-  return (
-    <main className="page-center">
-      <Card className="home fade-in home-card">
-        <p className="home-kicker">Data Center Suite</p>
-        <h1 className="title">Data Center Management Web Application</h1>
-        <p className="subtitle">Professional interface for companies, applications, dynamic fields, and file-managed records.</p>
-        <div className="row home-actions">
-          <Link className="button primary" href="/login?portal=admin">Admin Portal</Link>
-          <Link className="button secondary" href="/login?portal=user">User Portal</Link>
-        </div>
-        <p className="home-credentials">Default admin credentials: admin / admin123</p>
-      </Card>
-    </main>
-  );
+  const token = cookies().get('auth')?.value;
+
+  if (!token) {
+    redirect('/login?portal=user');
+  }
+
+  const payload = readTokenPayload(token);
+  const isExpired = payload?.exp ? payload.exp * 1000 <= Date.now() : true;
+  if (isExpired) {
+    redirect('/login?portal=user');
+  }
+
+  if (payload?.role === 'admin') {
+    redirect('/admin');
+  }
+
+  redirect('/dashboard');
 }

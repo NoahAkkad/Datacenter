@@ -11,9 +11,11 @@ import { DataTable } from '../../components/ui/table';
 import { AdminSidebar } from '../../components/AdminSidebar';
 import { GroupedFieldsView } from '../../components/GroupedFieldsView';
 import { formatDateOnly } from '../../lib/formatDate';
+import { useAuth } from '../../components/AuthProvider';
 
 export default function AdminPage() {
   const router = useRouter();
+  const { user: currentUserProfile, loading: authLoading, clearUser } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [active, setActive] = useState('home');
   const [data, setData] = useState([]);
@@ -45,41 +47,30 @@ export default function AdminPage() {
   const [duplicateCompanyName, setDuplicateCompanyName] = useState('');
   const [appName, setAppName] = useState('');
   const [fieldForm, setFieldForm] = useState({ name: '', type: 'text', tagId: '' });
-  const [userForm, setUserForm] = useState({ username: '', password: '' });
+  const [userForm, setUserForm] = useState({ username: '', email: '', password: '' });
   const [tagForm, setTagForm] = useState({ scope: 'application', companyId: '', applicationId: '', name: '', description: '', presetKey: '' });
   const [tagPresetOptions, setTagPresetOptions] = useState([]);
-  const [checkingSession, setCheckingSession] = useState(true);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [duplicatingCompany, setDuplicatingCompany] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState('');
-  const [currentUserProfile, setCurrentUserProfile] = useState(null);
   const [deletingUserId, setDeletingUserId] = useState('');
   const [globalTagConfirmOpen, setGlobalTagConfirmOpen] = useState(false);
 
   useEffect(() => {
-    const validateSession = async () => {
-      const response = await fetch('/api/auth/me', { cache: 'no-store' });
-      if (!response.ok) {
-        router.replace('/login?portal=admin');
-        return;
-      }
+    if (authLoading) return;
 
-      const user = await response.json();
-      if (user.role !== 'admin') {
-        router.replace('/dashboard');
-        return;
-      }
-      setCurrentUserId(user.id || '');
-      setCurrentUserProfile(user);
-      setCheckingSession(false);
-    };
+    if (!currentUserProfile) {
+      router.replace('/login?portal=admin');
+      return;
+    }
 
-    validateSession();
-  }, [router]);
+    if (currentUserProfile.role !== 'admin') {
+      router.replace('/dashboard');
+    }
+  }, [authLoading, currentUserProfile, router]);
 
   const applications = useMemo(
     () => data.flatMap((company) => company.applications.map((app) => ({ ...app, companyName: company.name }))),
@@ -207,12 +198,12 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    if (checkingSession) return;
+    if (authLoading || !currentUserProfile) return;
     refresh();
-  }, [checkingSession]);
+  }, [authLoading, currentUserProfile]);
 
   useEffect(() => {
-    if (checkingSession) return;
+    if (authLoading || !currentUserProfile) return;
     const loadTagPresets = async () => {
       try {
         const response = await fetch('/api/tag-presets');
@@ -228,7 +219,7 @@ export default function AdminPage() {
     };
 
     loadTagPresets();
-  }, [checkingSession]);
+  }, [authLoading, currentUserProfile]);
 
   const onLogout = async () => {
     setIsLoggingOut(true);
@@ -237,7 +228,7 @@ export default function AdminPage() {
     } finally {
       window.localStorage.removeItem('authToken');
       window.sessionStorage.removeItem('authToken');
-      setCurrentUserProfile(null);
+      clearUser();
       setIsLoggingOut(false);
       setLogoutConfirmOpen(false);
       setProfileMenuOpen(false);
@@ -335,7 +326,7 @@ export default function AdminPage() {
   const createUser = async () => {
     await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...userForm, role: 'user' }) });
     setUserModal(false);
-    setUserForm({ username: '', password: '' });
+    setUserForm({ username: '', email: '', password: '' });
     refresh();
   };
 
@@ -522,7 +513,7 @@ export default function AdminPage() {
     if (type === 'field') setEditing({ open: true, type, id: row.id, payload: { name: row.name, type: row.type || 'text', tagId: row.tagId || '' }, title: 'Edit Field' });
     if (type === 'tag') setEditing({ open: true, type, id: row.id, payload: { name: row.name, description: row.description || '', scope: row.scope || (row.allApplications ? 'company' : 'application'), companyId: row.companyId || '', applicationId: row.applicationId || '' }, title: 'Edit Tag' });
     if (type === 'data') setEditing({ open: true, type, id: row.id, payload: { values: row.values || {} }, title: `Edit Record ${row.id}` });
-    if (type === 'user') setEditing({ open: true, type, id: row.id, payload: { username: row.username, password: '' }, title: 'Edit User' });
+    if (type === 'user') setEditing({ open: true, type, id: row.id, payload: { username: row.username, email: row.email || '', password: '' }, title: 'Edit User' });
   };
 
   const applyOptimisticEdit = (type, id, updatedEntity) => {
@@ -741,7 +732,7 @@ export default function AdminPage() {
   };
 
   const displayName = formatDisplayName(currentUserProfile?.username);
-  const displayEmail = currentUserProfile?.email || 'No email available';
+  const displayEmail = currentUserProfile?.email?.trim() || 'Email unavailable';
 
   const onSidebarNavigate = (tab, applicationId = '') => {
     setActive(tab);
@@ -759,7 +750,7 @@ export default function AdminPage() {
     }
   };
 
-  if (checkingSession) {
+  if (authLoading) {
     return (
       <main className="page-center">
         <Card>Validating session...</Card>
@@ -1037,6 +1028,7 @@ export default function AdminPage() {
             <DataTable
               columns={[
                 { key: 'username', label: 'Username' },
+                { key: 'email', label: 'Email' },
                 { key: 'role', label: 'Role' },
                 {
                   key: 'actions',
@@ -1044,7 +1036,7 @@ export default function AdminPage() {
                   render: (row) => (
                     <div className="row">
                       <Button variant="secondary" onClick={() => openEdit('user', row)}>Edit</Button>
-                      {row.role === 'admin' || row.id === currentUserId
+                      {row.role === 'admin' || row.id === currentUserProfile?.id
                         ? <Button disabled title="Protected account">🗑️ Delete</Button>
                         : <Button onClick={() => openDelete('user', row.id, row.username)} disabled={deletingUserId === row.id}>{deletingUserId === row.id ? 'Deleting...' : '🗑️ Delete'}</Button>}
                     </div>
@@ -1171,6 +1163,7 @@ export default function AdminPage() {
 
       <Modal open={userModal} onClose={() => setUserModal(false)} title="Create Read-only User">
         <Input placeholder="Username" value={userForm.username} onChange={(event) => setUserForm({ ...userForm, username: event.target.value })} />
+        <Input type="email" placeholder="Email" value={userForm.email} onChange={(event) => setUserForm({ ...userForm, email: event.target.value })} />
         <Input type="password" placeholder="Password" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} />
         <Button onClick={createUser} disabled={!userForm.username || !userForm.password}>Create User</Button>
       </Modal>
@@ -1205,6 +1198,7 @@ export default function AdminPage() {
         </> : null}
         {editing.type === 'user' ? <>
           <Input placeholder="Username" value={editing.payload.username || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, username: event.target.value } }))} />
+          <Input type="email" placeholder="Email" value={editing.payload.email || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, email: event.target.value } }))} />
           <Input placeholder="New password (optional)" type="password" value={editing.payload.password || ''} onChange={(event) => setEditing((current) => ({ ...current, payload: { ...current.payload, password: event.target.value } }))} />
         </> : null}
         {editing.type === 'data' ? fields.filter((field) => records.find((record) => record.id === editing.id)?.applicationId === field.applicationId).map((field) => {

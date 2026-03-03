@@ -4,11 +4,10 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
-import { Modal } from '../../../../components/ui/modal';
 import { UserSidebar } from '../../../../components/UserSidebar';
 import { GroupedFieldsView } from '../../../../components/GroupedFieldsView';
 import { useAuth } from '../../../../components/AuthProvider';
-import { HeaderProfile } from '../../../../components/HeaderProfile';
+import { HeaderMenu } from '../../../../components/HeaderMenu';
 
 export default function ApplicationDetailsPage() {
   const router = useRouter();
@@ -21,7 +20,6 @@ export default function ApplicationDetailsPage() {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState('');
   const [applicationDetails, setApplicationDetails] = useState(null);
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
@@ -72,7 +70,6 @@ export default function ApplicationDetailsPage() {
       window.sessionStorage.removeItem('authToken');
       clearUser();
       setIsLoggingOut(false);
-      setLogoutConfirmOpen(false);
       router.replace('/login?portal=user');
       router.refresh();
     }
@@ -101,9 +98,7 @@ export default function ApplicationDetailsPage() {
             <h1 className="title">{applicationDetails?.name || 'Application Details'}</h1>
             <p className="subtitle">{applicationDetails?.companyName || 'Structured application information'}</p>
           </div>
-          <div className="profile">
-            <HeaderProfile user={user} loading={authLoading} onClick={() => setLogoutConfirmOpen(true)} />
-          </div>
+          <HeaderMenu onLogout={onLogout} loggingOut={isLoggingOut} />
         </header>
 
         <div className="row section-mini-gap">
@@ -121,13 +116,6 @@ export default function ApplicationDetailsPage() {
         )}
       </section>
 
-      <Modal open={logoutConfirmOpen} onClose={() => !isLoggingOut && setLogoutConfirmOpen(false)} title="Confirm Logout">
-        <p className="subtitle">Are you sure you want to logout?</p>
-        <div className="row">
-          <Button variant="secondary" onClick={() => setLogoutConfirmOpen(false)} disabled={isLoggingOut}>Cancel</Button>
-          <Button onClick={onLogout} disabled={isLoggingOut}>{isLoggingOut ? 'Logging out...' : 'Logout'}</Button>
-        </div>
-      </Modal>
     </main>
   );
 }

@@ -15,6 +15,7 @@ export default function DashboardPage() {
   const { user, loading: authLoading, clearUser } = useAuth();
   const [loadingApplications, setLoadingApplications] = useState(false);
   const [applications, setApplications] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [applicationsError, setApplicationsError] = useState('');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -34,28 +35,37 @@ export default function DashboardPage() {
   useEffect(() => {
     if (authLoading || !user || user.role === 'admin') return;
 
-    const loadApplications = async () => {
+    const loadSidebarData = async () => {
       setLoadingApplications(true);
       setApplicationsError('');
 
       try {
-        const response = await fetch('/api/applications', { cache: 'no-store' });
+        const [companiesResponse, applicationsResponse] = await Promise.all([
+          fetch('/api/companies', { cache: 'no-store' }),
+          fetch('/api/applications', { cache: 'no-store' })
+        ]);
 
-        if (!response.ok) {
+        if (!companiesResponse.ok || !applicationsResponse.ok) {
           throw new Error('Failed to load applications');
         }
 
-        const payload = await response.json();
-        setApplications(Array.isArray(payload.applications) ? payload.applications : []);
+        const [companiesPayload, applicationsPayload] = await Promise.all([
+          companiesResponse.json(),
+          applicationsResponse.json()
+        ]);
+
+        setCompanies(Array.isArray(companiesPayload.companies) ? companiesPayload.companies : []);
+        setApplications(Array.isArray(applicationsPayload.applications) ? applicationsPayload.applications : []);
       } catch (error) {
         setApplications([]);
+        setCompanies([]);
         setApplicationsError(error instanceof Error ? error.message : 'Unable to load applications');
       } finally {
         setLoadingApplications(false);
       }
     };
 
-    loadApplications();
+    loadSidebarData();
   }, [authLoading, user]);
 
   const onLogout = async () => {
@@ -82,6 +92,8 @@ export default function DashboardPage() {
     <main className="admin-shell">
       <UserSidebar
         onNavigate={() => {}}
+        companies={companies}
+        applications={applications}
       />
 
       <section className="main">

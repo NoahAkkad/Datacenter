@@ -1058,14 +1058,13 @@ app.prepare().then(() => {
       return;
     }
 
-    db.users = (db.users || []).map((user) => ({
-      ...user,
-      email: sanitizeText(user.email) || `${sanitizeText(user.username) || 'user'}@novacode.local`
-    }));
-
     const now = new Date().toISOString();
     const company = { id: nextId('cmp'), name, createdAt: now, updatedAt: now };
     withDb((db) => {
+      db.users = (db.users || []).map((user) => ({
+        ...user,
+        email: sanitizeText(user.email) || `${sanitizeText(user.username) || 'user'}@novacode.local`
+      }));
       db.companies.push(company);
       return db;
     });

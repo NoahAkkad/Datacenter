@@ -805,23 +805,54 @@ app.prepare().then(() => {
     });
   });
 
-  server.get('/api/companies', authRequired, requireRole('admin'), (req, res) => {
+  server.get('/api/companies', authRequired, (req, res) => {
     const db = readDb();
-    const companies = db.companies.map((company) => ({
-      ...company,
-      applications: db.applications
-        .filter((appEntry) => appEntry.companyId === company.id)
-        .map((appEntry) => ({
-          ...appEntry,
-          tags: tagsForApplication(db, appEntry),
-          fields: fieldsForApplication(db, appEntry),
-          records: (() => {
-            const mergedRecord = getConsolidatedRecord(db.records.filter((record) => record.applicationId === appEntry.id));
-            return mergedRecord ? [mergedRecord] : [];
-          })()
-        }))
-    }));
-    res.json(companies);
+
+    if (req.user.role === 'admin') {
+      const companies = db.companies.map((company) => ({
+        ...company,
+        applications: db.applications
+          .filter((appEntry) => appEntry.companyId === company.id)
+          .map((appEntry) => ({
+            ...appEntry,
+            tags: tagsForApplication(db, appEntry),
+            fields: fieldsForApplication(db, appEntry),
+            records: (() => {
+              const mergedRecord = getConsolidatedRecord(db.records.filter((record) => record.applicationId === appEntry.id));
+              return mergedRecord ? [mergedRecord] : [];
+            })()
+          }))
+      }));
+
+      res.json(companies);
+      return;
+    }
+
+    if (req.user.role !== 'user') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+
+    const account = db.users.find((entry) => entry.id === req.user.id);
+    const allowedCompanyIds = Array.from(new Set([...(account?.allowedCompanyIds || []), ...(account?.companyIds || [])].map((value) => sanitizeText(value)).filter(Boolean)));
+    const allowedApplicationIds = Array.from(new Set([...(account?.allowedApplicationIds || []), ...(account?.applicationIds || [])].map((value) => sanitizeText(value)).filter(Boolean)));
+
+    const applications = db.applications.filter((appEntry) => {
+      if (!allowedCompanyIds.length && !allowedApplicationIds.length) return true;
+      return allowedApplicationIds.includes(appEntry.id) || allowedCompanyIds.includes(appEntry.companyId);
+    });
+
+    const visibleCompanyIds = new Set(applications.map((appEntry) => appEntry.companyId));
+    const companies = db.companies
+      .filter((company) => visibleCompanyIds.has(company.id))
+      .map((company) => ({
+        id: company.id,
+        name: company.name,
+        createdAt: company.createdAt,
+        updatedAt: company.updatedAt
+      }));
+
+    res.json({ companies });
   });
 
   server.get('/api/applications', authRequired, requireRole('user'), (req, res) => {
@@ -842,6 +873,7 @@ app.prepare().then(() => {
         return {
           id: appEntry.id,
           name: appEntry.name,
+          companyId: appEntry.companyId,
           description: appEntry.description || appEntry.shortDescription || '',
           companyName: company?.name || '',
           createdAt: appEntry.createdAt,

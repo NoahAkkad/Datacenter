@@ -17,6 +17,8 @@ export default function ApplicationDetailsPage() {
   const { user, loading: authLoading, clearUser } = useAuth();
 
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [applications, setApplications] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [detailsError, setDetailsError] = useState('');
   const [applicationDetails, setApplicationDetails] = useState(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -37,27 +39,45 @@ export default function ApplicationDetailsPage() {
   useEffect(() => {
     if (authLoading || !user || user.role === 'admin' || !applicationId) return;
 
-    const loadApplicationDetails = async () => {
+    const loadDashboardData = async () => {
       setLoadingDetails(true);
       setDetailsError('');
 
       try {
-        const response = await fetch(`/api/applications/${applicationId}`, { cache: 'no-store' });
-        if (!response.ok) {
-          throw new Error(response.status === 404 ? 'Application not found.' : 'Failed to load application details.');
+        const [companiesResponse, applicationsResponse, detailsResponse] = await Promise.all([
+          fetch('/api/companies', { cache: 'no-store' }),
+          fetch('/api/applications', { cache: 'no-store' }),
+          fetch(`/api/applications/${applicationId}`, { cache: 'no-store' })
+        ]);
+
+        if (!companiesResponse.ok || !applicationsResponse.ok) {
+          throw new Error('Failed to load application details.');
         }
 
-        const payload = await response.json();
-        setApplicationDetails(payload);
+        if (!detailsResponse.ok) {
+          throw new Error(detailsResponse.status === 404 ? 'Application not found.' : 'Failed to load application details.');
+        }
+
+        const [companiesPayload, applicationsPayload, detailsPayload] = await Promise.all([
+          companiesResponse.json(),
+          applicationsResponse.json(),
+          detailsResponse.json()
+        ]);
+
+        setCompanies(Array.isArray(companiesPayload.companies) ? companiesPayload.companies : []);
+        setApplications(Array.isArray(applicationsPayload.applications) ? applicationsPayload.applications : []);
+        setApplicationDetails(detailsPayload);
       } catch (error) {
         setApplicationDetails(null);
+        setApplications([]);
+        setCompanies([]);
         setDetailsError(error instanceof Error ? error.message : 'Unable to load application details');
       } finally {
         setLoadingDetails(false);
       }
     };
 
-    loadApplicationDetails();
+    loadDashboardData();
   }, [applicationId, authLoading, user]);
 
   const onLogout = async () => {
@@ -84,6 +104,8 @@ export default function ApplicationDetailsPage() {
     <main className="admin-shell">
       <UserSidebar
         onNavigate={() => {}}
+        companies={companies}
+        applications={applications}
       />
 
       <section className="main">

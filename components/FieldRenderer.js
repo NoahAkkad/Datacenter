@@ -1,6 +1,7 @@
 'use client';
 
 import { LinkDisplay } from './ui/link-display';
+import { PdfThumbnailPreview } from './PdfThumbnailPreview';
 
 export function FieldRenderer({ field, onPreviewImage }) {
   if (field.type === 'image') {
@@ -19,11 +20,7 @@ export function FieldRenderer({ field, onPreviewImage }) {
   }
 
   if (field.type === 'pdf') {
-    return field.fileUrl ? (
-      <a className="button secondary field-file-btn" href={field.fileUrl} target="_blank" rel="noopener noreferrer">
-        Open PDF
-      </a>
-    ) : <span className="field-value">—</span>;
+    return field.fileUrl ? <PdfThumbnailPreview fileUrl={field.fileUrl} label={field.label} /> : <span className="field-value">—</span>;
   }
 
   if (field.type === 'link') {

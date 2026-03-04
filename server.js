@@ -949,6 +949,78 @@ app.prepare().then(() => {
     });
   });
 
+  server.get('/api/tags/search', authRequired, requireRole('user'), (req, res) => {
+    const selectedTagName = sanitizeText(req.query.name);
+    const db = readDb();
+    const account = db.users.find((entry) => entry.id === req.user.id);
+    const allowedCompanyIds = Array.from(new Set([...(account?.allowedCompanyIds || []), ...(account?.companyIds || [])].map((value) => sanitizeText(value)).filter(Boolean)));
+    const allowedApplicationIds = Array.from(new Set([...(account?.allowedApplicationIds || []), ...(account?.applicationIds || [])].map((value) => sanitizeText(value)).filter(Boolean)));
+
+    const visibleApplications = db.applications.filter((application) => {
+      if (!allowedCompanyIds.length && !allowedApplicationIds.length) return true;
+      return allowedApplicationIds.includes(application.id) || allowedCompanyIds.includes(application.companyId);
+    });
+
+    const uniqueTagNames = new Set();
+    const results = [];
+
+    visibleApplications.forEach((application) => {
+      const company = db.companies.find((entry) => entry.id === application.companyId);
+      const applicationTags = tagsForApplication(db, application);
+      const applicationFields = fieldsForApplication(db, application);
+      const mergedRecord = getConsolidatedRecord(db.records.filter((record) => record.applicationId === application.id));
+      const normalizedFields = normalizeRecordFields(applicationFields, applicationTags, mergedRecord?.values || {});
+
+      const fieldsByTagName = normalizedFields.reduce((accumulator, field) => {
+        const key = sanitizeText(field.tagName);
+        if (!key) return accumulator;
+        uniqueTagNames.add(key);
+        if (!accumulator[key]) {
+          accumulator[key] = [];
+        }
+
+        const alreadyExists = accumulator[key].some((entry) => entry.name === field.label);
+        if (!alreadyExists) {
+          accumulator[key].push({
+            name: field.label,
+            value: field.type === 'link' && !field.value ? '—' : field.value || field.fileUrl || '—',
+            type: field.type
+          });
+        }
+        return accumulator;
+      }, {});
+
+      if (!selectedTagName) {
+        return;
+      }
+
+      const matchedFields = fieldsByTagName[selectedTagName] || [];
+      if (!matchedFields.length) {
+        return;
+      }
+
+      results.push({
+        company: company?.name || 'Unknown Company',
+        application: application.name,
+        tag: selectedTagName,
+        fields: matchedFields
+      });
+    });
+
+    const tags = Array.from(uniqueTagNames).sort((a, b) => a.localeCompare(b));
+
+    if (!selectedTagName) {
+      res.json({ tags });
+      return;
+    }
+
+    res.json({
+      tags,
+      tag: selectedTagName,
+      results
+    });
+  });
+
   server.post('/api/companies', authRequired, requireRole('admin'), (req, res) => {
     const { name } = req.body;
     if (!name) {

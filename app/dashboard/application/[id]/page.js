@@ -22,6 +22,13 @@ export default function ApplicationDetailsPage() {
   const [detailsError, setDetailsError] = useState('');
   const [applicationDetails, setApplicationDetails] = useState(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [activeView, setActiveView] = useState('information');
+  const [availableTags, setAvailableTags] = useState([]);
+  const [loadingTags, setLoadingTags] = useState(false);
+  const [tagsError, setTagsError] = useState('');
+  const [selectedTag, setSelectedTag] = useState('');
+  const [tagResults, setTagResults] = useState([]);
+  const [loadingTagResults, setLoadingTagResults] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -92,6 +99,57 @@ export default function ApplicationDetailsPage() {
     }
   };
 
+  useEffect(() => {
+    if (authLoading || !user || user.role === 'admin') return;
+    if (activeView !== 'tags') return;
+    if (availableTags.length > 0) return;
+
+    const loadTags = async () => {
+      setLoadingTags(true);
+      setTagsError('');
+
+      try {
+        const response = await fetch('/api/tags/search', { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error('Failed to load tags.');
+        }
+
+        const payload = await response.json();
+        setAvailableTags(Array.isArray(payload.tags) ? payload.tags : []);
+      } catch (error) {
+        setAvailableTags([]);
+        setTagsError(error instanceof Error ? error.message : 'Unable to load tags.');
+      } finally {
+        setLoadingTags(false);
+      }
+    };
+
+    loadTags();
+  }, [activeView, authLoading, availableTags.length, user]);
+
+  const onSelectTag = async (tagName) => {
+    setSelectedTag(tagName);
+    setLoadingTagResults(true);
+    setTagsError('');
+
+    try {
+      const response = await fetch(`/api/tags/search?name=${encodeURIComponent(tagName)}`, { cache: 'no-store' });
+
+      if (!response.ok) {
+        throw new Error('Failed to load tag results.');
+      }
+
+      const payload = await response.json();
+      const nextResults = Array.isArray(payload.results) ? payload.results : [];
+      setTagResults(nextResults);
+    } catch (error) {
+      setTagResults([]);
+      setTagsError(error instanceof Error ? error.message : 'Unable to load tag results.');
+    } finally {
+      setLoadingTagResults(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <main className="page-center">
@@ -123,7 +181,28 @@ export default function ApplicationDetailsPage() {
 
         {detailsError ? <Card className="error section-gap">{detailsError}</Card> : null}
 
-        {loadingDetails ? (
+        <div className="section-gap tab-switcher" role="tablist" aria-label="Application section switcher">
+          <button
+            type="button"
+            className={`tab-switcher-btn ${activeView === 'information' ? 'active' : ''}`}
+            onClick={() => setActiveView('information')}
+            role="tab"
+            aria-selected={activeView === 'information'}
+          >
+            Information
+          </button>
+          <button
+            type="button"
+            className={`tab-switcher-btn ${activeView === 'tags' ? 'active' : ''}`}
+            onClick={() => setActiveView('tags')}
+            role="tab"
+            aria-selected={activeView === 'tags'}
+          >
+            Tags
+          </button>
+        </div>
+
+        {activeView === 'information' ? (loadingDetails ? (
           <Card className="section-gap stack">
             <Skeleton style={{ height: 24, width: '35%' }} />
             <Skeleton style={{ height: 52, width: '100%' }} />
@@ -132,6 +211,69 @@ export default function ApplicationDetailsPage() {
         ) : (
           <div className="section-gap">
             <GroupedFieldsView groupedFields={applicationDetails?.groupedFields || []} />
+          </div>
+        )) : (
+          <div className="section-gap stack">
+            {tagsError ? <Card className="error">{tagsError}</Card> : null}
+            {loadingTags ? (
+              <Card className="stack">
+                <Skeleton style={{ height: 24, width: '25%' }} />
+                <Skeleton style={{ height: 80, width: '100%' }} />
+              </Card>
+            ) : (
+              <Card className="stack">
+                <h2 className="section-title">All tags</h2>
+                {availableTags.length ? (
+                  <div className="tag-chip-grid">
+                    {availableTags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className={`tag-chip-btn ${selectedTag === tag ? 'active' : ''}`}
+                        onClick={() => onSelectTag(tag)}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                ) : <p className="subtitle">No tags available.</p>}
+              </Card>
+            )}
+
+            {selectedTag ? (
+              <div className="stack">
+                <h2 className="section-title">{selectedTag}</h2>
+                {loadingTagResults ? (
+                  <Card className="stack">
+                    <Skeleton style={{ height: 22, width: '50%' }} />
+                    <Skeleton style={{ height: 42, width: '100%' }} />
+                  </Card>
+                ) : tagResults.length ? (
+                  <div className="stack">
+                    {tagResults.map((result) => (
+                      <details key={`${result.company}-${result.application}`} className="tag-result-card" open>
+                        <summary>
+                          <span>Company: {result.company}</span>
+                          <span>Application: {result.application}</span>
+                        </summary>
+                        <div className="tag-result-fields">
+                          {result.fields.map((field) => (
+                            <div key={`${result.company}-${result.application}-${field.name}`} className="tag-result-field-row">
+                              <strong>{field.name}</strong>
+                              <span>{field.value || '—'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                ) : (
+                  <Card className="empty-state-card">
+                    <p className="subtitle">No matching entries found for this tag.</p>
+                  </Card>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
       </section>

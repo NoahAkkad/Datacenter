@@ -54,6 +54,12 @@ export default function AdminPage() {
 
   const [companyModal, setCompanyModal] = useState(false);
   const [duplicateCompanyModal, setDuplicateCompanyModal] = useState({ open: false, sourceCompanyId: '', sourceCompanyName: '' });
+  const [duplicateApplicationModal, setDuplicateApplicationModal] = useState({
+    open: false,
+    sourceApplicationId: '',
+    sourceApplicationName: '',
+    companyId: ''
+  });
   const [appModal, setAppModal] = useState(false);
   const [fieldModal, setFieldModal] = useState(false);
   const [userModal, setUserModal] = useState(false);
@@ -63,6 +69,7 @@ export default function AdminPage() {
 
   const [companyName, setCompanyName] = useState('');
   const [duplicateCompanyName, setDuplicateCompanyName] = useState('');
+  const [duplicateApplicationName, setDuplicateApplicationName] = useState('');
   const [appName, setAppName] = useState('');
   const [fieldForm, setFieldForm] = useState({ name: '', type: 'text', tagId: '' });
   const [fieldPresetKey, setFieldPresetKey] = useState('Manual');
@@ -74,6 +81,7 @@ export default function AdminPage() {
   const [deleting, setDeleting] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [duplicatingCompany, setDuplicatingCompany] = useState(false);
+  const [duplicatingApplication, setDuplicatingApplication] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState('');
   const [globalTagConfirmOpen, setGlobalTagConfirmOpen] = useState(false);
   const [editingFieldPresetKey, setEditingFieldPresetKey] = useState('Manual');
@@ -386,6 +394,56 @@ export default function AdminPage() {
       setStatusMessage('Company duplication failed. Please retry.');
     } finally {
       setDuplicatingCompany(false);
+    }
+  };
+
+  const openDuplicateApplicationModal = (application) => {
+    setDuplicateApplicationModal({
+      open: true,
+      sourceApplicationId: application.id,
+      sourceApplicationName: application.name,
+      companyId: application.companyId || ''
+    });
+    setDuplicateApplicationName(`${application.name} Copy`);
+    setStatusMessage('');
+  };
+
+  const closeDuplicateApplicationModal = (force = false) => {
+    if (duplicatingApplication && !force) return;
+    setDuplicateApplicationModal({ open: false, sourceApplicationId: '', sourceApplicationName: '', companyId: '' });
+    setDuplicateApplicationName('');
+  };
+
+  const duplicateApplication = async () => {
+    if (!duplicateApplicationModal.sourceApplicationId || !duplicateApplicationName.trim() || !duplicateApplicationModal.companyId) {
+      setStatusMessage('New application name and company are required.');
+      return;
+    }
+
+    setDuplicatingApplication(true);
+    try {
+      const response = await fetch(`/api/applications/${duplicateApplicationModal.sourceApplicationId}/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: duplicateApplicationName.trim(),
+          companyId: duplicateApplicationModal.companyId
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatusMessage(payload.error || 'Application duplication failed.');
+        return;
+      }
+
+      setStatusMessage('Application duplicated successfully');
+      closeDuplicateApplicationModal(true);
+      refresh();
+    } catch {
+      setStatusMessage('Application duplication failed. Please retry.');
+    } finally {
+      setDuplicatingApplication(false);
     }
   };
 
@@ -990,7 +1048,7 @@ export default function AdminPage() {
                 {
                   key: 'actions',
                   label: 'Actions',
-                  render: (row) => <div className="action-icon-group"><ActionIconButton label="Edit" onClick={() => openEdit('application', row)}><PencilIcon /></ActionIconButton><ActionIconButton label="Delete" color="danger" onClick={() => openDelete('application', row.id, row.name)}><Trash2Icon /></ActionIconButton></div>
+                  render: (row) => <div className="action-icon-group"><ActionIconButton label="Edit" onClick={() => openEdit('application', row)}><PencilIcon /></ActionIconButton><ActionIconButton label={`Duplicate ${row.name}`} onClick={() => openDuplicateApplicationModal(row)}><CopyIcon /></ActionIconButton><ActionIconButton label="Delete" color="danger" onClick={() => openDelete('application', row.id, row.name)}><Trash2Icon /></ActionIconButton></div>
                 }
               ]}
               data={applications}
@@ -1209,6 +1267,32 @@ export default function AdminPage() {
         <div className="row">
           <Button variant="secondary" onClick={() => setDuplicateCompanyModal({ open: false, sourceCompanyId: '', sourceCompanyName: '' })} disabled={duplicatingCompany}>Cancel</Button>
           <Button onClick={duplicateCompany} disabled={duplicatingCompany || !duplicateCompanyName.trim()}>{duplicatingCompany ? 'Creating copy...' : 'Create Copy'}</Button>
+        </div>
+      </Modal>
+
+
+      <Modal
+        open={duplicateApplicationModal.open}
+        onClose={closeDuplicateApplicationModal}
+        title="Duplicate Application"
+      >
+        <p className="subtitle">Create a structural copy of {duplicateApplicationModal.sourceApplicationName || 'the selected application'}.</p>
+        <Input
+          placeholder="New application name"
+          value={duplicateApplicationName}
+          onChange={(event) => setDuplicateApplicationName(event.target.value)}
+        />
+        <select
+          className="select"
+          value={duplicateApplicationModal.companyId}
+          onChange={(event) => setDuplicateApplicationModal((current) => ({ ...current, companyId: event.target.value }))}
+        >
+          <option value="">Select company</option>
+          {data.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+        </select>
+        <div className="row">
+          <Button variant="secondary" onClick={closeDuplicateApplicationModal} disabled={duplicatingApplication}>Cancel</Button>
+          <Button onClick={duplicateApplication} disabled={duplicatingApplication || !duplicateApplicationName.trim() || !duplicateApplicationModal.companyId}>{duplicatingApplication ? 'Creating copy...' : 'Create Copy'}</Button>
         </div>
       </Modal>
 

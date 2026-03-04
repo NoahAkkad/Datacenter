@@ -382,6 +382,100 @@ function duplicateCompanyStructure(db, { sourceCompanyId, name }) {
   return clonedCompany;
 }
 
+function duplicateApplicationStructure(db, { sourceApplicationId, name, companyId }) {
+  const sourceApplication = db.applications.find((application) => application.id === sourceApplicationId);
+  if (!sourceApplication) {
+    const error = new Error('Application not found');
+    error.status = 404;
+    throw error;
+  }
+
+  const targetCompanyId = sanitizeText(companyId) || sourceApplication.companyId;
+  const targetCompany = db.companies.find((company) => company.id === targetCompanyId);
+  if (!targetCompany) {
+    const error = new Error('Target company not found');
+    error.status = 404;
+    throw error;
+  }
+
+  if (!Array.isArray(db.tags)) {
+    db.tags = [];
+  }
+  if (!Array.isArray(db.fields)) {
+    db.fields = [];
+  }
+
+  const sourceTags = (db.tags || []).filter((tag) => tag.applicationId === sourceApplicationId && resolveTagScope(tag) === TAG_SCOPES.APPLICATION);
+  const sourceTagById = new Map(sourceTags.map((tag) => [tag.id, tag]));
+  const sourceTagIds = new Set(sourceTags.map((tag) => tag.id));
+
+  const sourceFields = (db.fields || []).filter((field) => sourceTagIds.has(field.tagId));
+  const hasInvalidFieldStructure = sourceFields.some((field) => !field.tagId || !sourceTagById.has(field.tagId));
+  if (hasInvalidFieldStructure) {
+    const error = new Error('Cannot duplicate application with invalid field-to-tag mapping');
+    error.status = 400;
+    throw error;
+  }
+
+  const now = new Date().toISOString();
+  const clonedApplication = {
+    id: nextId('app'),
+    companyId: targetCompany.id,
+    name,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  const tagIdMap = new Map();
+  const clonedTags = sourceTags.map((tag) => {
+    const clonedTag = {
+      ...tag,
+      id: nextId('tag'),
+      applicationId: clonedApplication.id,
+      companyId: targetCompany.id,
+      company_id: targetCompany.id,
+      allApplications: false,
+      scope: TAG_SCOPES.APPLICATION,
+      scopeType: toScopeType(TAG_SCOPES.APPLICATION),
+      createdAt: now,
+      updatedAt: now
+    };
+    tagIdMap.set(tag.id, clonedTag.id);
+    return clonedTag;
+  });
+
+  const clonedTagNameById = new Map(clonedTags.map((tag) => [tag.id, tag.name]));
+  const clonedFields = sourceFields.map((field) => {
+    const clonedTagId = tagIdMap.get(field.tagId);
+    if (!clonedTagId) {
+      const error = new Error(`Tag mapping not found for field ${field.id}`);
+      error.status = 500;
+      throw error;
+    }
+
+    return {
+      ...field,
+      id: nextId('fld'),
+      applicationId: clonedApplication.id,
+      companyId: targetCompany.id,
+      allApplications: false,
+      scope: TAG_SCOPES.APPLICATION,
+      scope_type: toScopeType(TAG_SCOPES.APPLICATION),
+      tagId: clonedTagId,
+      tag_id: clonedTagId,
+      tagName: clonedTagNameById.get(clonedTagId) || field.tagName,
+      createdAt: now,
+      updatedAt: now
+    };
+  });
+
+  db.applications.push(clonedApplication);
+  db.tags.push(...clonedTags);
+  db.fields.push(...clonedFields);
+
+  return clonedApplication;
+}
+
 function logUpdateIssue(entity, message, meta = {}) {
   // eslint-disable-next-line no-console
   console.error(`[update:${entity}] ${message}`, meta);
@@ -904,6 +998,33 @@ app.prepare().then(() => {
     });
 
     res.status(201).json(application);
+  });
+
+  server.post('/api/applications/:applicationId/duplicate', authRequired, requireRole('admin'), (req, res) => {
+    const { applicationId } = req.params;
+    const nextName = sanitizeText(req.body?.name);
+    const targetCompanyId = sanitizeText(req.body?.companyId);
+
+    if (!nextName) {
+      res.status(400).json({ error: 'Application name is required' });
+      return;
+    }
+
+    try {
+      let clonedApplication = null;
+      withDb((db) => {
+        clonedApplication = duplicateApplicationStructure(db, {
+          sourceApplicationId: applicationId,
+          name: nextName,
+          companyId: targetCompanyId
+        });
+        return db;
+      });
+
+      res.status(201).json(clonedApplication);
+    } catch (error) {
+      res.status(error.status || 500).json({ error: error.message || 'Failed to duplicate application' });
+    }
   });
 
   server.get('/api/applications/:applicationId/tags', authRequired, requireRole('admin'), (req, res) => {

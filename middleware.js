@@ -21,6 +21,9 @@ export function middleware(request) {
     if (pathname.startsWith('/dashboard')) {
       return NextResponse.redirect(new URL('/login?portal=user', request.url));
     }
+    if (pathname.startsWith('/tags')) {
+      return NextResponse.redirect(new URL('/login?portal=user', request.url));
+    }
     return NextResponse.next();
   }
 
@@ -41,6 +44,10 @@ export function middleware(request) {
     return NextResponse.redirect(new URL('/admin', request.url));
   }
 
+  if (pathname.startsWith('/tags') && role === 'admin') {
+    return NextResponse.redirect(new URL('/admin', request.url));
+  }
+
   if (pathname === '/login' && role === 'admin') {
     return NextResponse.redirect(new URL('/admin', request.url));
   }
@@ -53,5 +60,5 @@ export function middleware(request) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/dashboard/:path*', '/login']
+  matcher: ['/admin/:path*', '/dashboard/:path*', '/tags/:path*', '/login']
 };

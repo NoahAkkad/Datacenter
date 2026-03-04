@@ -949,6 +949,36 @@ app.prepare().then(() => {
     });
   });
 
+  server.get('/api/tags', authRequired, requireRole('user'), (req, res) => {
+    const db = readDb();
+    const account = db.users.find((entry) => entry.id === req.user.id);
+    const allowedCompanyIds = Array.from(new Set([...(account?.allowedCompanyIds || []), ...(account?.companyIds || [])].map((value) => sanitizeText(value)).filter(Boolean)));
+    const allowedApplicationIds = Array.from(new Set([...(account?.allowedApplicationIds || []), ...(account?.applicationIds || [])].map((value) => sanitizeText(value)).filter(Boolean)));
+
+    const visibleApplications = db.applications.filter((application) => {
+      if (!allowedCompanyIds.length && !allowedApplicationIds.length) return true;
+      return allowedApplicationIds.includes(application.id) || allowedCompanyIds.includes(application.companyId);
+    });
+
+    const uniqueTagNames = new Set();
+
+    visibleApplications.forEach((application) => {
+      const applicationTags = tagsForApplication(db, application);
+      const applicationFields = fieldsForApplication(db, application);
+      const mergedRecord = getConsolidatedRecord(db.records.filter((record) => record.applicationId === application.id));
+      const normalizedFields = normalizeRecordFields(applicationFields, applicationTags, mergedRecord?.values || {});
+
+      normalizedFields.forEach((field) => {
+        const key = sanitizeText(field.tagName);
+        if (!key) return;
+        uniqueTagNames.add(key);
+      });
+    });
+
+    const tags = Array.from(uniqueTagNames).sort((a, b) => a.localeCompare(b));
+    res.json({ tags });
+  });
+
   server.get('/api/tags/search', authRequired, requireRole('user'), (req, res) => {
     const selectedTagName = sanitizeText(req.query.name);
     const db = readDb();

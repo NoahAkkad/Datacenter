@@ -160,7 +160,10 @@ th { background: #f8fafc; font-size: 12px; text-transform: uppercase; color: #64
 .user-tag-link.active{background:#dbeafe;color:#1d4ed8;font-weight:600;}
 .user-tag-root{font-weight:700;color:#334155;}
 
-.preview-image{max-width:100%;border-radius:12px;}
+.image-preview-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;}
+.image-preview-image{max-width:90vw;max-height:90vh;width:auto;height:auto;object-fit:contain;border-radius:12px;}
+.image-preview-close{position:absolute;top:16px;right:16px;background:#fff;border:0;border-radius:50%;width:36px;height:36px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:24px;line-height:1;color:#111827;transition:background-color .2s ease,color .2s ease;}
+.image-preview-close:hover{background:#ef4444;color:#fff;}
 .tag-card{padding:20px;}
 .tag-title-wrap{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:14px;}
 .tag-title{margin:0;font-size:20px;color:#111827;}

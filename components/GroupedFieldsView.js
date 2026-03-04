@@ -1,12 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card } from './ui/card';
-import { Modal } from './ui/modal';
 import { TagSection } from './TagSection';
 
 export function GroupedFieldsView({ groupedFields = [] }) {
   const [imagePreview, setImagePreview] = useState('');
+
+  useEffect(() => {
+    if (!imagePreview) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setImagePreview('');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [imagePreview]);
 
   if (!groupedFields.length) {
     return (
@@ -22,9 +34,24 @@ export function GroupedFieldsView({ groupedFields = [] }) {
         ))}
       </div>
 
-      <Modal open={Boolean(imagePreview)} onClose={() => setImagePreview('')} title="Image Preview">
-        {imagePreview ? <img src={imagePreview} alt="Application image" className="preview-image" /> : null}
-      </Modal>
+      {imagePreview ? (
+        <div className="image-preview-overlay" onClick={() => setImagePreview('')}>
+          <button
+            type="button"
+            className="image-preview-close"
+            aria-label="Close image preview"
+            onClick={() => setImagePreview('')}
+          >
+            ×
+          </button>
+          <img
+            src={imagePreview}
+            alt="Application image"
+            className="image-preview-image"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      ) : null}
     </>
   );
 }

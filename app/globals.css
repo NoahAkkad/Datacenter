@@ -154,6 +154,11 @@ th { background: #f8fafc; font-size: 12px; text-transform: uppercase; color: #64
 .user-company-app-link{width:100%;border-radius:10px;padding:8px 10px;display:flex;align-items:center;gap:8px;color:#475569;font-size:14px;}
 .user-company-app-link:hover{background:#eff6ff;color:#1e3a8a;}
 .user-company-app-link.active{background:#dbeafe;color:#1d4ed8;font-weight:600;}
+.user-tag-nav{margin-top:10px;gap:3px;}
+.user-tag-link{width:100%;border-radius:10px;padding:8px 10px;display:flex;align-items:center;color:#475569;font-size:14px;}
+.user-tag-link:hover{background:#eff6ff;color:#1e3a8a;}
+.user-tag-link.active{background:#dbeafe;color:#1d4ed8;font-weight:600;}
+.user-tag-root{font-weight:700;color:#334155;}
 
 .preview-image{max-width:100%;border-radius:12px;}
 .tag-card{padding:20px;}
